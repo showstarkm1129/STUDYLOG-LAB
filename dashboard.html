@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
-    <title>Stalog Lab</title>
+    <title>Stalog Dashboard</title>
     <link rel="stylesheet" href="dashboard.css">
   </head>
   <body>
@@ -13,20 +13,16 @@
         <div class="brand">
           <span class="brand-mark" aria-hidden="true">S</span>
           <div>
-            <strong>Stalog Lab</strong>
-            <span>prototype toolbox</span>
+            <strong>Stalog</strong>
+            <span>student dashboard</span>
           </div>
         </div>
 
         <nav class="main-nav" id="main-nav">
           <button class="nav-item is-active" data-view="home" type="button"><span>⌂</span>ホーム</button>
-          <button class="nav-item" data-view="tasks" type="button"><span>✓</span>やること</button>
+          <button class="nav-item" data-view="tasks" type="button"><span>✓</span>課題</button>
           <button class="nav-item" data-view="attendance" type="button"><span>◔</span>出席</button>
-          <button class="nav-item" data-view="results" type="button"><span>↗</span>成績</button>
-          <button class="nav-item" data-view="timetable" type="button"><span>▦</span>時間割</button>
           <button class="nav-item" data-view="courses" type="button"><span>□</span>科目</button>
-          <button class="nav-item" data-view="insights" type="button"><span>✦</span>発見</button>
-          <button class="nav-item" data-view="lab" type="button"><span>⌁</span>試作品一覧</button>
         </nav>
 
         <div class="sidebar-foot">
@@ -38,16 +34,10 @@
       <main class="main-content">
         <header class="topbar">
           <button class="icon-button mobile-only" id="menu-toggle" type="button" aria-label="メニューを開く">☰</button>
-          <label class="global-search">
-            <span aria-hidden="true">⌕</span>
-            <input id="global-search" type="search" placeholder="科目・課題を横断検索（ / ）" autocomplete="off">
-            <kbd>/</kbd>
-          </label>
+          <div class="topbar-title"><strong>学習状況</strong><span id="topbar-freshness">端末内データ</span></div>
           <div class="topbar-actions">
-            <button class="icon-button" id="theme-toggle" type="button" aria-label="表示テーマを切り替える">◐</button>
-            <button class="review-counter" id="review-counter" type="button" title="採用候補を見る">
-              <span>採用候補</span><strong>0</strong>
-            </button>
+            <span class="local-badge">● 外部送信なし</span>
+            <button class="secondary-button" id="topbar-data-button" type="button">データ管理</button>
           </div>
         </header>
 
@@ -71,7 +61,6 @@
             <input id="json-import" type="file" accept="application/json,.json">
           </label>
           <button id="json-export" class="secondary-button" type="button">JSONを書き出す</button>
-          <button id="csv-export" class="secondary-button" type="button">未完了をCSV</button>
         </div>
         <p class="help-text">読み込んだJSONは <code>chrome.storage.local</code> に保存します。外部通信は行いません。</p>
       </form>
@@ -87,7 +76,6 @@
       </div>
     </dialog>
 
-    <div id="search-panel" class="search-panel" hidden></div>
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
 
     <template id="empty-state-template">

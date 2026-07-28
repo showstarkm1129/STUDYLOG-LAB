@@ -151,6 +151,9 @@ button { color: inherit; }
 kbd { background: var(--surface-strong); border: 1px solid var(--line); border-radius: 5px; color: var(--muted); font-size: 10px; padding: 1px 6px; }
 
 .topbar-actions { align-items: center; display: flex; gap: 8px; }
+.topbar-title strong { display: block; font-size: 13px; }
+.topbar-title span { color: var(--muted); display: block; font-size: 9px; margin-top: 2px; }
+.local-badge { color: var(--good); font-size: 9px; font-weight: 800; }
 .icon-button, .quiet-button, .secondary-button, .primary-button, .review-counter {
   border: 0;
   cursor: pointer;
@@ -308,6 +311,9 @@ kbd { background: var(--surface-strong); border: 1px solid var(--line); border-r
 .task-row.is-snoozed { opacity: .55; }
 .task-check { align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 50%; color: var(--good); cursor: pointer; display: inline-flex; height: 24px; justify-content: center; width: 24px; }
 .task-check.is-pinned { background: var(--good-soft); border-color: var(--good); }
+.task-check.is-manual { background: var(--good); border-color: var(--good); color: #fff; }
+.manual-pill { background: var(--purple-soft); border-radius: 999px; color: var(--purple); display: inline-block; font-size: 8px; font-weight: 900; padding: 4px 7px; white-space: nowrap; }
+.task-reason { color: var(--warn); font-size: 8px; font-weight: 800; }
 .tiny-action { background: transparent; border: 0; color: var(--muted); cursor: pointer; font-size: 14px; padding: 3px; }
 .tiny-action:hover { color: var(--brand); }
 
@@ -322,6 +328,9 @@ kbd { background: var(--surface-strong); border: 1px solid var(--line); border-r
 .simulator { display: grid; gap: 15px; }
 .simulator label { color: var(--muted); display: grid; font-size: 10px; gap: 6px; }
 .simulator input[type="range"] { accent-color: var(--brand); width: 100%; }
+.stepper { align-items: center; display: grid; gap: 12px; grid-template-columns: 40px 1fr 40px; }
+.stepper button { background: var(--surface); border: 1px solid var(--line); border-radius: 9px; cursor: pointer; font-size: 18px; height: 38px; }
+.stepper output { font-size: 19px; font-weight: 900; text-align: center; }
 .sim-result { align-items: center; background: var(--surface-soft); border-radius: 12px; display: flex; justify-content: space-between; padding: 13px; }
 .sim-result strong { font-size: 25px; }
 
@@ -360,6 +369,16 @@ kbd { background: var(--surface-strong); border: 1px solid var(--line); border-r
 .course-card-metrics div { background: var(--surface-soft); border-radius: 8px; padding: 8px; }
 .course-card-metrics strong { display: block; font-size: 14px; }
 .course-card-metrics span { color: var(--muted); font-size: 8px; }
+.health-breakdown { display: grid; gap: 7px; margin-top: 12px; }
+.health-line { align-items: center; display: grid; gap: 8px; grid-template-columns: 78px 1fr 36px; }
+.health-line span, .health-line strong { font-size: 8px; }
+.health-line strong { text-align: right; }
+
+.quality-impact { display: grid; gap: 8px; }
+.quality-impact-row { align-items: center; background: var(--surface-soft); border-radius: 10px; display: grid; gap: 10px; grid-template-columns: auto 1fr auto; padding: 10px; }
+.quality-impact-row > span:first-child { align-items: center; background: var(--surface-strong); border-radius: 50%; display: flex; font-size: 9px; height: 28px; justify-content: center; width: 28px; }
+.quality-impact-row strong { display: block; font-size: 10px; }
+.quality-impact-row small { color: var(--muted); display: block; font-size: 8px; margin-top: 2px; }
 
 .heatmap { display: grid; gap: 4px; grid-template-columns: repeat(14, 1fr); }
 .heat-cell { aspect-ratio: 1; background: var(--surface-strong); border-radius: 4px; min-height: 12px; }

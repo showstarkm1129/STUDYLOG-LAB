@@ -535,7 +535,7 @@
         <div class="stalog-bridge-actions">
           <button class="stalog-bridge-primary" type="button" data-action="collect">取得して保存</button>
           <button type="button" data-action="export">JSONを書き出す</button>
-          <button type="button" data-action="dashboard">Labを開く</button>
+          <button type="button" data-action="dashboard">ダッシュボードを開く</button>
         </div>
         <p id="stalog-bridge-status"></p>
       </div>

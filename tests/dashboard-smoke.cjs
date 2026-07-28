@@ -41,30 +41,36 @@ const server = http.createServer((request, response) => {
   await page.goto(`http://127.0.0.1:${port}/dashboard.html`, { waitUntil: "networkidle" });
   await page.waitForSelector(".metric");
   assert.match(await page.locator("body").innerText(), /11科目/);
-  assert.equal(await page.locator(".nav-item").count(), 8);
+  assert.equal(await page.locator(".nav-item").count(), 4);
 
   if (screenshotDir) {
     fs.mkdirSync(screenshotDir, { recursive: true });
     await page.screenshot({ path: path.join(screenshotDir, "stalog-lab-home.png"), fullPage: true });
   }
 
-  for (const view of ["tasks", "attendance", "results", "timetable", "courses", "insights", "lab"]) {
+  for (const view of ["tasks", "attendance", "courses"]) {
     await page.click(`[data-view="${view}"]`);
     await page.waitForSelector(".page-header h1");
     assert((await page.locator("#app-view").innerText()).length > 100, `${view} should contain rendered content`);
   }
 
+  await page.click('[data-view="tasks"]');
+  const pendingBefore = await page.locator(".task-row").count();
+  await page.locator("[data-manual-toggle]:not([disabled])").first().click();
+  assert((await page.locator(".task-row").count()) < pendingBefore, "manual completion should remove a pending row");
+  await page.click('[data-task-filter="manual"]');
+  assert((await page.locator(".task-row").count()) >= 1, "manual completion should be reversible");
+
+  await page.click('[data-view="attendance"]');
+  const rateBefore = await page.locator("#sim-rate").textContent();
+  await page.click('[data-sim-step="1"]');
+  const rateAfter = await page.locator("#sim-rate").textContent();
+  assert.notEqual(rateAfter, rateBefore, "simulator stepper should update the projected rate");
+
   await page.click('[data-view="courses"]');
   await page.click("[data-course-open]");
   assert(await page.locator("#course-dialog").evaluate((dialog) => dialog.open));
   await page.click('[data-close-dialog="course-dialog"]');
-
-  await page.click('[data-view="lab"]');
-  await page.click('[data-candidate="daily-brief"]');
-  assert.equal(await page.locator("#review-counter strong").textContent(), "1");
-
-  await page.fill("#global-search", snapshot.courses[0].name.slice(0, 3));
-  await page.waitForSelector("#search-panel:not([hidden]) .search-result");
 
   assert.deepEqual(errors, [], `browser errors:\n${errors.join("\n")}`);
   await browser.close();
