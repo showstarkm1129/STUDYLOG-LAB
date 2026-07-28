@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "Stalog Bridge",
+  "version": "1.0.0",
+  "description": "スタログの学習状況を端末内へ収集し、採用した11機能のダッシュボードで確認します。",
+  "permissions": ["storage"],
+  "host_permissions": ["https://portal.iwasaki.ac.jp/*"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Stalog Dashboard を開く"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://portal.iwasaki.ac.jp/lms/*",
+        "https://portal.iwasaki.ac.jp/portal/lmsinc/*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["page-hook.js"],
+      "matches": ["https://portal.iwasaki.ac.jp/*"]
+    }
+  ]
+}

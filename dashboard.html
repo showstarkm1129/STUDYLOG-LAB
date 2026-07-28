@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <title>Stalog Dashboard</title>
+    <link rel="stylesheet" href="dashboard.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="メインメニュー">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">S</span>
+          <div>
+            <strong>Stalog</strong>
+            <span>student dashboard</span>
+          </div>
+        </div>
+
+        <nav class="main-nav" id="main-nav">
+          <button class="nav-item is-active" data-view="home" type="button"><span>⌂</span>ホーム</button>
+          <button class="nav-item" data-view="tasks" type="button"><span>✓</span>課題</button>
+          <button class="nav-item" data-view="attendance" type="button"><span>◔</span>出席</button>
+          <button class="nav-item" data-view="courses" type="button"><span>□</span>科目</button>
+        </nav>
+
+        <div class="sidebar-foot">
+          <div class="privacy-note"><span aria-hidden="true">●</span> データはこの端末内だけ</div>
+          <button class="quiet-button full-width" id="open-data-dialog" type="button">データ管理</button>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <button class="icon-button mobile-only" id="menu-toggle" type="button" aria-label="メニューを開く">☰</button>
+          <div class="topbar-title"><strong>学習状況</strong><span id="topbar-freshness">端末内データ</span></div>
+          <div class="topbar-actions">
+            <span class="local-badge">● 外部送信なし</span>
+            <button class="secondary-button" id="topbar-data-button" type="button">データ管理</button>
+          </div>
+        </header>
+
+        <section id="app-view" class="view" aria-live="polite"></section>
+      </main>
+    </div>
+
+    <dialog id="data-dialog" class="modal">
+      <form method="dialog" class="modal-card">
+        <header>
+          <div>
+            <p class="eyebrow">LOCAL DATA</p>
+            <h2>データ管理</h2>
+          </div>
+          <button class="icon-button" value="cancel" aria-label="閉じる">×</button>
+        </header>
+        <div id="data-summary" class="data-summary"></div>
+        <div class="modal-actions">
+          <label class="primary-button file-button">
+            JSONを読み込む
+            <input id="json-import" type="file" accept="application/json,.json">
+          </label>
+          <button id="json-export" class="secondary-button" type="button">JSONを書き出す</button>
+        </div>
+        <p class="help-text">読み込んだJSONは <code>chrome.storage.local</code> に保存します。外部通信は行いません。</p>
+      </form>
+    </dialog>
+
+    <dialog id="course-dialog" class="modal wide-modal">
+      <div class="modal-card">
+        <header>
+          <div id="course-dialog-heading"></div>
+          <button class="icon-button" data-close-dialog="course-dialog" aria-label="閉じる">×</button>
+        </header>
+        <div id="course-dialog-body"></div>
+      </div>
+    </dialog>
+
+    <div id="toast-region" class="toast-region" aria-live="polite"></div>
+
+    <template id="empty-state-template">
+      <div class="empty-state">
+        <span class="empty-illustration" aria-hidden="true">⌁</span>
+        <h1>まず、スタログのJSONを読み込む</h1>
+        <p>収集済みデータから、出席・課題・時間割を横断する小さなツール群を試せます。</p>
+        <button class="primary-button" data-open-data type="button">JSONを選ぶ</button>
+        <small>スタログ上で「取得して保存」済みなら、自動的に表示されます。</small>
+      </div>
+    </template>
+
+    <script src="dashboard.js"></script>
+  </body>
+</html>
