@@ -1,0 +1,50 @@
+#stalog-bridge-root {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 2147483647;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+#stalog-bridge-toggle {
+  border: 0;
+  border-radius: 999px;
+  background: #165d9c;
+  box-shadow: 0 3px 14px rgba(0, 0, 0, .28);
+  color: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 11px 16px;
+}
+
+#stalog-bridge-panel {
+  background: #fff;
+  border: 1px solid #b9c9d8;
+  border-radius: 10px;
+  bottom: 52px;
+  box-shadow: 0 7px 30px rgba(0, 0, 0, .28);
+  color: #1c2b39;
+  display: none;
+  line-height: 1.5;
+  padding: 16px;
+  position: absolute;
+  right: 0;
+  width: min(360px, calc(100vw - 36px));
+}
+
+#stalog-bridge-panel[data-open="true"] { display: block; }
+#stalog-bridge-panel h2 { font-size: 17px; margin: 0 0 8px; }
+#stalog-bridge-panel p { font-size: 13px; margin: 7px 0; }
+#stalog-bridge-panel .stalog-bridge-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+#stalog-bridge-panel button {
+  border: 1px solid #165d9c;
+  border-radius: 5px;
+  background: #fff;
+  color: #165d9c;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 7px 10px;
+}
+#stalog-bridge-panel button.stalog-bridge-primary { background: #165d9c; color: #fff; }
+#stalog-bridge-status { border-top: 1px solid #d9e2eb; margin-top: 12px; padding-top: 8px; white-space: pre-line; }
