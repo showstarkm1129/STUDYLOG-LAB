@@ -229,6 +229,16 @@ kbd { background: var(--surface-strong); border: 1px solid var(--line); border-r
 .hero-number { font-size: clamp(48px, 7vw, 78px); font-weight: 900; letter-spacing: -.08em; line-height: .86; }
 .hero-number small { font-size: 12px; letter-spacing: 0; margin-left: 5px; }
 
+.next-course-card { min-height: 205px; }
+.next-course-card h3 { font-size: clamp(20px, 2.2vw, 29px); letter-spacing: -.045em; line-height: 1.2; margin: 7px 0 5px; }
+.next-course-when { color: var(--accent) !important; font-size: 11px; font-weight: 900; margin: 12px 0 0; }
+.next-course-meta { color: color-mix(in srgb, var(--surface) 66%, transparent); font-size: 10px; margin: 0 0 13px; }
+.next-course-link { color: var(--surface); font-size: 10px; font-weight: 900; text-decoration: none; }
+.next-course-link:hover { text-decoration: underline; }
+.next-course-clock { align-items: baseline; display: flex; font-size: 16px; font-weight: 900; justify-content: center; min-width: 92px; }
+.next-course-clock strong { font-size: clamp(54px, 7vw, 82px); letter-spacing: -.08em; line-height: .85; }
+.next-course-clock span { font-size: 12px; margin-left: 5px; }
+
 .ring {
   --value: 50;
   align-items: center;

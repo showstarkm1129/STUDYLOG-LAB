@@ -280,15 +280,17 @@
       const link = cell.querySelector('a[href*="/lms/class/"]');
       const route = parseClassLink(link?.getAttribute("href"));
       const rawText = text(cell);
-      const continuation = !route.classId && /^〃(?:\s|$)/.test(rawText);
+      const parsedRoom = rawText.match(/教室\s*[:：]\s*([0-9]{2,4}[A-Za-z]?)/)?.[1];
+      // 連続時限は「2 〃」のように時限番号の後へ省略記号が付く。
+      const continuation = !route.classId && /^(?:[1-6]\s*)?〃(?:\s|$)/.test(rawText);
       const inherited = continuation ? lastCourseByColumn.get(columnIndex) : undefined;
-      const course = route.classId ? { classId: route.classId, courseName: text(link) } : inherited;
+      const course = route.classId ? { classId: route.classId, courseName: text(link), room: parsedRoom } : inherited;
       if (!course?.classId) return;
       if (route.classId) lastCourseByColumn.set(columnIndex, course);
       const dateLabel = headerLabels.find((label) => dateFromLabel(label)) || dateButtons[columnIndex - 1];
       const date = dateLabel ? dateFromLabel(dateLabel) : timetableDates[orderedColumns.indexOf(columnIndex)];
       const period = rowLabels.map(periodFromLabel).find(Boolean) || periodFromLabel(rawText);
-      const room = rawText.match(/教室\s*[:：]\s*([0-9]{2,4}[A-Za-z]?)/)?.[1];
+      const room = parsedRoom || inherited?.room;
       slots.push({
         date,
         dateLabel,

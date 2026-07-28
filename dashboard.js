@@ -8,9 +8,18 @@
   const PORTAL_ORIGIN = "https://portal.iwasaki.ac.jp";
   const DAY = 86_400_000;
   const COURSE_COLORS = ["#3157d5", "#ef6b4d", "#23865f", "#7758c9", "#c18a18", "#cb4f82", "#2787a8"];
+  const PERIOD_TIMES = Object.freeze({
+    1: { start: "09:00", end: "09:50" },
+    2: { start: "10:00", end: "10:50" },
+    3: { start: "11:00", end: "11:50" },
+    4: { start: "12:40", end: "13:30" },
+    5: { start: "13:40", end: "14:30" },
+    6: { start: "14:40", end: "15:30" }
+  });
 
   const FEATURES = [
     { id: "daily-brief", name: "今日のブリーフ", area: "ホーム", description: "今日の授業・教室・注意事項を1枚に集約" },
+    { id: "next-course", name: "次の科目", area: "ホーム", description: "現在時刻から次に切り替わる科目と教室を即時表示" },
     { id: "action-triage", name: "次にやること", area: "ホーム", description: "未完了を種類・日付・出席リスクから自動順位付け" },
     { id: "progress-ring", name: "完了率リング", area: "ホーム", description: "課題とテストの消化率を一目で確認" },
     { id: "attendance-alert", name: "出席アラート", area: "ホーム", description: "欠席余裕が少ない科目だけを早期表示" },
@@ -75,6 +84,13 @@
   const average = (items, getter = (item) => item) => items.length ? sum(items, getter) / items.length : 0;
   const pad = (value) => String(value).padStart(2, "0");
   const isoDay = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+
+  function dashboardNow() {
+    // ローカルのプレビューだけは境界時刻を再現可能にする。拡張機能では常に端末時刻を使う。
+    const override = location.hostname === "127.0.0.1" ? new URLSearchParams(location.search).get("now") : null;
+    const parsed = override ? new Date(override) : null;
+    return parsed && !Number.isNaN(parsed.valueOf()) ? parsed : new Date();
+  }
 
   async function storageGet(keys) {
     if (globalThis.chrome?.storage?.local) return chrome.storage.local.get(keys);
@@ -248,12 +264,103 @@
     return array(state.snapshot?.timetableSlots).filter((slot) => slot.date === today).sort((a, b) => Number(a.period) - Number(b.period));
   }
 
-  function nextSlot() {
-    const slots = array(state.snapshot?.timetableSlots)
-      .filter((slot) => slot.date)
+  function clockMinutes(value) {
+    const [hour, minute] = String(value || "").split(":").map(Number);
+    return Number.isFinite(hour) && Number.isFinite(minute) ? hour * 60 + minute : null;
+  }
+
+  function slotStart(slot) {
+    const time = PERIOD_TIMES[Number(slot?.period)]?.start;
+    return slot?.date && time ? new Date(`${slot.date}T${time}:00`) : null;
+  }
+
+  function orderedTimetableSlots() {
+    return array(state.snapshot?.timetableSlots)
+      .filter((slot) => slot.date && PERIOD_TIMES[Number(slot.period)])
       .sort((a, b) => String(a.date).localeCompare(String(b.date)) || Number(a.period) - Number(b.period));
-    const today = isoDay(new Date());
-    return slots.find((slot) => slot.date >= today) || slots[0] || null;
+  }
+
+  function firstDifferentCourse(slots, startIndex, classId) {
+    return slots.slice(startIndex).find((slot) => String(slot.classId) !== String(classId));
+  }
+
+  function nextDifferentCourse(now = dashboardNow()) {
+    const slots = orderedTimetableSlots();
+    const today = isoDay(now);
+    const todaysSlots = slots.filter((slot) => slot.date === today);
+    const laterDateSlot = slots.find((slot) => slot.date > today);
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const activeIndex = todaysSlots.findIndex((slot) => {
+      const period = PERIOD_TIMES[Number(slot.period)];
+      return clockMinutes(period.start) <= currentMinutes && currentMinutes < clockMinutes(period.end);
+    });
+
+    if (activeIndex >= 0) {
+      const active = todaysSlots[activeIndex];
+      const next = firstDifferentCourse(todaysSlots, activeIndex + 1, active.classId) || laterDateSlot;
+      return next ? { slot: next, context: "during", current: active, startsAt: slotStart(next) } : null;
+    }
+
+    const futureIndex = todaysSlots.findIndex((slot) => clockMinutes(PERIOD_TIMES[Number(slot.period)].start) > currentMinutes);
+    if (futureIndex >= 0) {
+      const future = todaysSlots[futureIndex];
+      const previous = [...todaysSlots.slice(0, futureIndex)].reverse().find((slot) => clockMinutes(PERIOD_TIMES[Number(slot.period)].end) <= currentMinutes);
+      const isSameContinuousCourse = previous
+        && Number(future.period) === Number(previous.period) + 1
+        && String(future.classId) === String(previous.classId);
+      if (isSameContinuousCourse) {
+        const next = firstDifferentCourse(todaysSlots, futureIndex + 1, future.classId) || laterDateSlot;
+        return next ? { slot: next, context: "between-continuation", current: previous, startsAt: slotStart(next) } : null;
+      }
+      return { slot: future, context: "upcoming", current: previous || null, startsAt: slotStart(future) };
+    }
+
+    return laterDateSlot ? { slot: laterDateSlot, context: "next-day", current: todaysSlots.at(-1) || null, startsAt: slotStart(laterDateSlot) } : null;
+  }
+
+  function nextCourseTiming(nextCourse, now = dashboardNow()) {
+    if (!nextCourse?.startsAt) return "開始時刻不明";
+    const minutes = Math.max(0, Math.ceil((nextCourse.startsAt - now) / 60_000));
+    if (nextCourse.slot.date === isoDay(now)) {
+      if (minutes < 60) return `あと${minutes}分`;
+      const hours = Math.floor(minutes / 60);
+      const rest = minutes % 60;
+      return rest ? `あと${hours}時間${rest}分` : `あと${hours}時間`;
+    }
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return nextCourse.slot.date === isoDay(tomorrow) ? "明日" : formatDate(nextCourse.slot.date);
+  }
+
+  function renderNextCourseCard() {
+    const nextCourse = nextDifferentCourse();
+    if (!nextCourse) {
+      return `<section class="card hero-card next-course-card span-5" data-next-course-card>
+        <div>${cardHead("next-course", "次の科目", "収集済みの時間割から判定")}<h3>次の科目を判定できません</h3><p class="muted">次の授業日を含む時間割をスタログで収集してください。</p></div>
+        <div class="next-course-clock">--<span>限</span></div>
+      </section>`;
+    }
+    const slot = nextCourse.slot;
+    const periodTime = PERIOD_TIMES[Number(slot.period)];
+    const timing = nextCourseTiming(nextCourse);
+    const href = slot.classId ? `${PORTAL_ORIGIN}/lms/class/${encodeURIComponent(slot.classId)}/` : "";
+    return `<section class="card hero-card next-course-card span-5" data-next-course-card data-next-class-id="${esc(slot.classId || "")}">
+      <div>${cardHead("next-course", "次の科目", "同じ科目の連続時限は飛ばして表示")}
+        <p class="next-course-when">${esc(timing)} · ${esc(formatDate(slot.date))}</p>
+        <h3>${esc(slot.courseName || courseName(slot.classId))}</h3>
+        <p class="next-course-meta">${esc(slot.period)}限 ${esc(periodTime.start)}開始${slot.room ? ` · ${esc(slot.room)}教室` : ""}</p>
+        ${href ? `<a class="next-course-link" href="${esc(href)}" target="_blank" rel="noreferrer">科目を開く →</a>` : ""}
+      </div>
+      <div class="next-course-clock"><strong>${esc(slot.period)}</strong><span>限</span></div>
+    </section>`;
+  }
+
+  function refreshNextCourseCard() {
+    const current = document.querySelector("[data-next-course-card]");
+    if (!current || state.view !== "home" || !snapshotReady()) return;
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = renderNextCourseCard();
+    current.replaceWith(wrapper.firstElementChild);
   }
 
   function reviewedCount() {
@@ -317,8 +424,7 @@
     const courses = courseStats();
     const atRisk = courses.filter((course) => course.margin !== null && course.margin <= 2).sort((a, b) => a.margin - b.margin);
     const today = todaySlots();
-    const next = nextSlot();
-    const highest = tasks[0];
+    const next = nextDifferentCourse()?.slot;
     const freshnessHours = state.snapshot.collectedAt ? Math.max(0, Math.round((Date.now() - parseDate(state.snapshot.collectedAt)) / 3_600_000)) : null;
 
     const actions = `<button class="secondary-button" data-copy-brief type="button">今日をコピー</button><button class="primary-button" data-view-target="tasks" type="button">やることを見る</button>`;
@@ -333,12 +439,7 @@
         </div>
       </section>
 
-      <section class="card hero-card span-5">
-        <div>${cardHead("action-triage", "最優先の1件", "迷わず着手するための提案")}
-          ${highest ? `<div class="row-main"><strong>${esc(highest.title || "名称なし")}</strong><span>${esc(courseName(highest.classId))} · ${esc(highest.kind || "項目")}</span></div>` : `<p class="muted">未完了はありません。</p>`}
-        </div>
-        <div class="hero-number">${tasks.filter((item) => item.priority.level === "high").length}<small>優先</small></div>
-      </section>
+      ${renderNextCourseCard()}
 
       <section class="card span-4">${cardHead("progress-ring", "学習の消化率", "完了と結果待ちを分けて表示")}
         <div style="display:flex;align-items:center;gap:18px">
@@ -976,6 +1077,7 @@
     if (snapshotReady()) await addHistorySnapshot(state.snapshot);
     updateDataSummary();
     render();
+    setInterval(refreshNextCourseCard, 30_000);
   }
 
   initialize().catch((error) => {
