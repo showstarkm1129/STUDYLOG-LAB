@@ -154,17 +154,7 @@
 .stalog-context-line .stalog-unit-exam-label { display: block; }
 
 .top-timetable-table-td.stalog-unit-exam-cell {
-  background: #fff0f1 !important;
   border: 2px solid #c63b48 !important;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .7), 0 3px 10px rgba(159, 35, 49, .15) !important;
-  color: #731d29 !important;
-  position: relative;
-}
-.top-timetable-table-td.stalog-unit-exam-cell a { color: #a1192c !important; font-weight: 900 !important; }
-.stalog-unit-exam-day {
-  background: #b82335 !important;
-  color: #fff !important;
-  font-weight: 900 !important;
 }
 
 .stalog-context-metrics {
