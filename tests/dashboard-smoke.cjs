@@ -12,6 +12,14 @@ assert(fixturePath, "usage: dashboard-smoke.cjs <snapshot.json> [screenshot-dir]
 
 const root = process.cwd();
 const snapshot = JSON.parse(fs.readFileSync(fixturePath, "utf8"));
+snapshot.reports.push(
+  { classId: "10067", directoryId: "990001", title: "(D)テスト用ダイジェスト未実施", status: "未完了", kind: "クイズ", href: "/lms/class/10067/990001/" },
+  { classId: "10067", directoryId: "990001", title: "(H)テスト用ダイジェスト未実施補講", status: "未完了", kind: "クイズ", href: "/lms/class/10067/990001/" },
+  { classId: "10067", directoryId: "990002", title: "(D)テスト用ダイジェスト59点", status: "完了 (59/100点)", kind: "クイズ", href: "/lms/class/10067/990002/" },
+  { classId: "10067", directoryId: "990002", title: "(H)テスト用ダイジェスト59点補講", status: "未完了", kind: "クイズ", href: "/lms/class/10067/990002/" },
+  { classId: "10067", directoryId: "990003", title: "(D)テスト用ダイジェスト60点", status: "完了 (60/100点)", kind: "クイズ", href: "/lms/class/10067/990003/" },
+  { classId: "10067", directoryId: "990003", title: "(H)テスト用ダイジェスト60点補講", status: "未完了", kind: "クイズ", href: "/lms/class/10067/990003/" }
+);
 const mime = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript" };
 
 const server = http.createServer((request, response) => {
@@ -61,6 +69,12 @@ let browser;
   }
 
   await page.click('[data-view="tasks"]');
+  const taskText = await page.locator("#app-view").innerText();
+  assert.match(taskText, /\(D\)テスト用ダイジェスト未実施/);
+  assert.doesNotMatch(taskText, /\(H\)テスト用ダイジェスト未実施補講/);
+  assert.match(taskText, /\(H\)テスト用ダイジェスト59点補講/);
+  assert.doesNotMatch(taskText, /\(H\)テスト用ダイジェスト60点補講/);
+  assert.doesNotMatch(taskText, /\(H\)ダイジェスト01補講/);
   const pendingBefore = await page.locator(".task-row").count();
   const manuallyCompletedKey = await page.locator("[data-manual-toggle]:not([disabled])").first().getAttribute("data-manual-toggle");
   assert(todayCourseIds.includes(manuallyCompletedKey.split("::")[0]), "smoke fixture should check one of today's tasks");
@@ -78,10 +92,13 @@ let browser;
   assert.notEqual(rateAfter, rateBefore, "simulator stepper should update the projected rate");
 
   await page.click('[data-view="courses"]');
-  await page.click("[data-course-open]");
+  await page.click('[data-course-open="10067"]');
   assert(await page.locator("#course-dialog").evaluate((dialog) => dialog.open));
   assert.match(await page.locator("#course-dialog").innerText(), /課題を実施して完了/);
   assert.match(await page.locator("#course-dialog").innerText(), /提出済|完了 \(/);
+  assert.match(await page.locator("#course-dialog").innerText(), /Dで補講完了/);
+  assert.match(await page.locator("#course-dialog").innerText(), /補講は判定待ち/);
+  assert.match(await page.locator("#course-dialog").innerText(), /ダイジェスト 60%/);
   const dialogChecks = page.locator('#course-dialog [data-manual-toggle]:not([disabled])');
   const dialogManualBefore = await page.locator("#course-dialog .task-check.is-manual").count();
   await dialogChecks.first().click();

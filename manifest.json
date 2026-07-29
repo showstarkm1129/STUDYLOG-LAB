@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Stalog Bridge",
-  "version": "1.1.5",
+  "version": "1.2.0",
   "description": "スタログの場面に合う学習情報を表示し、採用した11機能のダッシュボードで確認します。",
   "permissions": ["storage"],
   "host_permissions": ["https://portal.iwasaki.ac.jp/*"],
@@ -18,7 +18,7 @@
         "https://portal.iwasaki.ac.jp/lms/*",
         "https://portal.iwasaki.ac.jp/portal/lmsinc/*"
       ],
-      "js": ["content.js"],
+      "js": ["digest-rules.js", "content.js"],
       "css": ["content.css"],
       "run_at": "document_start"
     }

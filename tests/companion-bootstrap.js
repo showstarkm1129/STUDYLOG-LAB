@@ -1,5 +1,13 @@
 (async () => {
   const snapshot = await fetch("/__fixture").then((response) => response.json());
+  snapshot.reports.push(
+    { classId: "10183", directoryId: "990001", title: "(D)テスト用ダイジェスト未実施", status: "未完了", kind: "クイズ", href: "/lms/class/10183/990001/" },
+    { classId: "10183", directoryId: "990001", title: "(H)テスト用ダイジェスト未実施補講", status: "未完了", kind: "クイズ", href: "/lms/class/10183/990001/" },
+    { classId: "10183", directoryId: "990002", title: "(D)テスト用ダイジェスト59点", status: "完了 (59/100点)", kind: "クイズ", href: "/lms/class/10183/990002/" },
+    { classId: "10183", directoryId: "990002", title: "(H)テスト用ダイジェスト59点補講", status: "未完了", kind: "クイズ", href: "/lms/class/10183/990002/" },
+    { classId: "10183", directoryId: "990003", title: "(D)テスト用ダイジェスト60点", status: "完了 (60/100点)", kind: "クイズ", href: "/lms/class/10183/990003/" },
+    { classId: "10183", directoryId: "990003", title: "(H)テスト用ダイジェスト60点補講", status: "未完了", kind: "クイズ", href: "/lms/class/10183/990003/" }
+  );
   const state = {
     stalogBridgeSnapshotV1: snapshot,
     stalogDashboardPreferencesV1: { manualCompleted: [] }
@@ -35,7 +43,12 @@
     }
   };
 
-  const script = document.createElement("script");
-  script.src = "/content.js";
-  document.head.append(script);
+  const loadScript = (src) => new Promise((resolve) => {
+    const script = document.createElement("script");
+    script.src = src;
+    script.addEventListener("load", resolve, { once: true });
+    document.head.append(script);
+  });
+  await loadScript("/digest-rules.js");
+  await loadScript("/content.js");
 })();

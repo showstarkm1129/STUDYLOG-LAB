@@ -87,8 +87,22 @@ const server = http.createServer((request, response) => {
   const directoryText = await page.locator("#stalog-context-body").innerText();
   assert.match(directoryText, /この回の未整理/);
   assert.match(directoryText, /同じ科目のほかの未整理/);
-  assert.match(directoryText, /\(H\)ダイジェスト_01補講/);
-  assert.match(directoryText, /\(H\)ダイジェスト_02補講/);
+  assert.doesNotMatch(directoryText, /\(H\)ダイジェスト_01補講/);
+  assert.doesNotMatch(directoryText, /\(H\)ダイジェスト_02補講/);
+
+  await visit("/lms/class/10183/990001/", "この授業回");
+  const unattemptedDigestText = await page.locator("#stalog-context-body").innerText();
+  assert.match(unattemptedDigestText, /\(D\)テスト用ダイジェスト未実施/);
+  assert.doesNotMatch(unattemptedDigestText, /\(H\)テスト用ダイジェスト未実施補講/);
+
+  await visit("/lms/class/10183/990002/", "この授業回");
+  const failedDigestText = await page.locator("#stalog-context-body").innerText();
+  assert.match(failedDigestText, /\(H\)テスト用ダイジェスト59点補講/);
+  assert.doesNotMatch(failedDigestText, /\(D\)テスト用ダイジェスト59点/);
+
+  await visit("/lms/class/10183/990003/", "この授業回");
+  const passedDigestText = await page.locator("#stalog-context-body").innerText();
+  assert.doesNotMatch(passedDigestText, /テスト用ダイジェスト60点補講/);
 
   for (const route of [
     "/lms/content/10183/quiz/123/",

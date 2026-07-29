@@ -315,8 +315,13 @@ kbd { background: var(--surface-strong); border: 1px solid var(--line); border-r
 .task-check.is-pinned { background: var(--good-soft); border-color: var(--good); }
 .task-check.is-manual, .task-check.is-manual:hover { background: var(--good); border-color: var(--good); color: #fff; }
 .task-check.is-portal-done { background: var(--good-soft); border-color: var(--good); color: var(--good); cursor: default; opacity: .72; }
+.task-check.is-digest-done { background: var(--brand-soft); border-color: var(--brand); color: var(--brand); cursor: default; }
+.task-check.is-deferred { background: var(--surface-strong); border-color: var(--line); color: transparent; cursor: default; }
 .task-row.is-manual { background: #f4f8f5; }
 .manual-pill { background: var(--purple-soft); border-radius: 999px; color: var(--purple); display: inline-block; font-size: 8px; font-weight: 900; padding: 4px 7px; white-space: nowrap; }
+.digest-pill, .deferred-pill { border-radius: 999px; display: inline-block; font-size: 8px; font-weight: 900; padding: 4px 7px; white-space: nowrap; }
+.digest-pill { background: var(--brand-soft); color: var(--brand); }
+.deferred-pill { background: var(--surface-strong); color: var(--muted); }
 .completion-state { align-items: flex-end; display: grid; gap: 3px; justify-items: end; min-width: 92px; }
 .completion-state small { color: var(--muted); font-size: 7px; max-width: 125px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-reason { color: var(--warn); font-size: 8px; font-weight: 800; }

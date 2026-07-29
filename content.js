@@ -564,6 +564,25 @@
     return new Set(preferences.manualCompleted).has(reportKey(report));
   }
 
+  function digestResolution(report, snapshot) {
+    return StalogDigestRules.resolution(report, array(snapshot.reports));
+  }
+
+  function isDigestAutoComplete(report, snapshot) {
+    return digestResolution(report, snapshot).state === "auto-complete";
+  }
+
+  function isDigestDeferred(report, snapshot) {
+    return digestResolution(report, snapshot).state === "deferred";
+  }
+
+  function isEffectivelyPending(report, snapshot, preferences) {
+    return isPortalPending(report)
+      && !isManualComplete(report, preferences)
+      && !isDigestAutoComplete(report, snapshot)
+      && !isDigestDeferred(report, snapshot);
+  }
+
   function attendanceRate(course) {
     const attended = Number(course?.attended || 0);
     const absent = Number(course?.absent || 0);
@@ -654,9 +673,9 @@
     return courseMap(snapshot).get(String(classId))?.name || `科目 ${classId || "不明"}`;
   }
 
-  function portalPendingReports(snapshot, filters = {}) {
+  function portalPendingReports(snapshot, preferences, filters = {}) {
     return array(snapshot.reports).filter((report) => {
-      if (!isPortalPending(report)) return false;
+      if (!isPortalPending(report) || isDigestAutoComplete(report, snapshot) || isDigestDeferred(report, snapshot)) return false;
       if (filters.classId && String(report.classId) !== String(filters.classId)) return false;
       if (filters.directoryId && String(report.directoryId) !== String(filters.directoryId)) return false;
       return true;
@@ -664,7 +683,7 @@
   }
 
   function pendingReports(snapshot, preferences, filters = {}) {
-    return portalPendingReports(snapshot, filters).filter((report) => !isManualComplete(report, preferences));
+    return portalPendingReports(snapshot, preferences, filters).filter((report) => !isManualComplete(report, preferences));
   }
 
   function compactLabel(scene, snapshot, preferences) {
@@ -705,10 +724,10 @@
   }
 
   function progressBlock(snapshot, preferences, classIds = null) {
-    const reports = array(snapshot.reports).filter((report) => !classIds || classIds.has(String(report.classId)));
-    const done = reports.filter((report) => isPortalDone(report) || isManualComplete(report, preferences)).length;
+    const reports = array(snapshot.reports).filter((report) => (!classIds || classIds.has(String(report.classId))) && !isDigestDeferred(report, snapshot));
+    const done = reports.filter((report) => isPortalDone(report) || isManualComplete(report, preferences) || isDigestAutoComplete(report, snapshot)).length;
     const rate = reports.length ? Math.round(done / reports.length * 100) : 0;
-    const pending = reports.filter((report) => isPortalPending(report) && !isManualComplete(report, preferences)).length;
+    const pending = reports.filter((report) => isEffectivelyPending(report, snapshot, preferences)).length;
     return `<div class="stalog-context-feature"><span>${classIds ? "今日の科目の整理率" : "課題の整理率"}</span><strong>${rate}%</strong><small>${done}/${reports.length}件 · 未完了${pending}件</small></div>`;
   }
 
@@ -723,9 +742,9 @@
   function sceneContent(scene, snapshot, preferences) {
     const context = readClassContext();
     const course = courseMap(snapshot).get(String(context.classId));
-    const allPending = portalPendingReports(snapshot);
-    const coursePending = portalPendingReports(snapshot, { classId: context.classId });
-    const directoryPending = portalPendingReports(snapshot, { classId: context.classId, directoryId: context.directoryId });
+    const allPending = portalPendingReports(snapshot, preferences);
+    const coursePending = portalPendingReports(snapshot, preferences, { classId: context.classId });
+    const directoryPending = portalPendingReports(snapshot, preferences, { classId: context.classId, directoryId: context.directoryId });
     const otherCoursePending = coursePending.filter((report) => String(report.directoryId || "") !== String(context.directoryId || ""));
     const today = todayCourseBlocks(snapshot);
     const todayClassIds = new Set(today.map((slot) => String(slot.classId)));

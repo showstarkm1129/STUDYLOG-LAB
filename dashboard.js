@@ -111,7 +111,12 @@
 
   function manualSet() { return new Set(state.prefs.manualCompleted); }
   function isManualComplete(report) { return manualSet().has(reportKey(report)); }
-  function isEffectivelyDone(report) { return isPortalDone(report) || isManualComplete(report); }
+  function digestResolution(report) { return StalogDigestRules.resolution(report, array(state.snapshot?.reports)); }
+  function isDigestAutoComplete(report) { return digestResolution(report).state === "auto-complete"; }
+  function isDigestDeferred(report) { return digestResolution(report).state === "deferred"; }
+  function isEffectivelyDone(report) { return isPortalDone(report) || isManualComplete(report) || isDigestAutoComplete(report); }
+  function isEffectivelyPending(report) { return isPortalPending(report) && !isManualComplete(report) && !isDigestAutoComplete(report) && !isDigestDeferred(report); }
+  function isCountedReport(report) { return !isDigestDeferred(report); }
 
   function courseMap() {
     return new Map(array(state.snapshot?.courses).map((course) => [String(course.classId), course]));
@@ -186,10 +191,12 @@
     const directories = array(state.snapshot?.directories);
     return array(state.snapshot?.courses).map((course) => {
       const ownReports = reports.filter((report) => String(report.classId) === String(course.classId));
-      const portalDone = ownReports.filter(isPortalDone).length;
-      const manualDone = ownReports.filter((report) => isPortalPending(report) && isManualComplete(report)).length;
-      const effectiveDone = ownReports.filter(isEffectivelyDone).length;
-      const completion = ownReports.length ? effectiveDone / ownReports.length : 1;
+      const countedReports = ownReports.filter(isCountedReport);
+      const portalDone = countedReports.filter(isPortalDone).length;
+      const digestDone = countedReports.filter(isDigestAutoComplete).length;
+      const manualDone = countedReports.filter((report) => isPortalPending(report) && isManualComplete(report) && !isDigestAutoComplete(report)).length;
+      const effectiveDone = countedReports.filter(isEffectivelyDone).length;
+      const completion = countedReports.length ? effectiveDone / countedReports.length : 1;
       const attendance = attendanceRate(course);
       const hasAttendance = Number(course.attended || 0) + Number(course.absent || 0) + Number(course.publicAbsent || 0) > 0;
       const attendancePoints = hasAttendance ? Math.round(clamp(attendance / ATTENDANCE_THRESHOLD, 0, 1) * 50) : 0;
@@ -199,10 +206,11 @@
         ...course,
         ownReports,
         portalDone,
+        digestDone,
         manualDone,
         effectiveDone,
-        reportsTotal: ownReports.length,
-        pending: ownReports.filter((report) => isPortalPending(report) && !isManualComplete(report)).length,
+        reportsTotal: countedReports.length,
+        pending: countedReports.filter(isEffectivelyPending).length,
         completion,
         attendance,
         attendancePoints,
@@ -238,7 +246,7 @@
 
   function pendingTasks() {
     return array(state.snapshot?.reports)
-      .filter((report) => isPortalPending(report) && !isManualComplete(report))
+      .filter(isEffectivelyPending)
       .map(enrichReport)
       .sort((a, b) => b.priority.score - a.priority.score || (b.context.date?.valueOf() || 0) - (a.context.date?.valueOf() || 0));
   }
@@ -259,6 +267,9 @@
 
   function reportStatus(report) {
     const manual = isManualComplete(report);
+    const digest = digestResolution(report);
+    if (digest.state === "auto-complete") return `<span class="completion-state"><span class="digest-pill">Dで補講完了</span><small>ダイジェスト ${Math.round(digest.scoreRate * 100)}%</small></span>`;
+    if (digest.state === "deferred") return `<span class="completion-state"><span class="deferred-pill">補講は判定待ち</span><small>先にダイジェストを実施</small></span>`;
     if (isPortalDone(report)) return `<span class="completion-state"><span class="status-pill done">課題を実施して完了</span><small>${esc(report.status || "完了")}${manual ? " · 手動チェックあり" : ""}</small></span>`;
     if (manual) return `<span class="completion-state"><span class="manual-pill">手動で完了</span><small>スタログ: ${esc(report.status || "未完了")}</small></span>`;
     const type = isPortalPending(report) ? "pending" : isWaiting(report) ? "waiting" : "done";
@@ -271,12 +282,17 @@
       const report = rawReport.priority ? rawReport : enrichReport(rawReport);
       const manual = isManualComplete(report);
       const portalDone = isPortalDone(report);
+      const digest = digestResolution(report);
+      const digestDone = digest.state === "auto-complete";
+      const deferred = digest.state === "deferred";
+      const locked = portalDone || digestDone || deferred;
       const link = reportLink(report);
       const contextLabel = report.context.date ? `${report.context.label} ${formatDate(report.context.date)}` : "日付なし";
       const reason = report.priority.reasons[0] ? `<span class="task-reason"> · ${esc(report.priority.reasons[0])}</span>` : "";
+      const actionLabel = manual ? "チェックを外して未整理へ戻す" : digestDone ? "ダイジェスト6割以上のため完了" : deferred ? "ダイジェスト実施後に補講の要否を判定" : portalDone ? "スタログ上で完了済み" : "チェックして完了扱いにする";
       return `<div class="task-row${manual ? " is-manual" : ""}">
-        <button class="task-check${manual ? " is-manual" : portalDone ? " is-portal-done" : ""}" data-manual-toggle="${esc(report.key)}" type="button" aria-pressed="${manual}" aria-label="${manual ? "チェックを外して未整理へ戻す" : portalDone ? "スタログ上で完了済み" : "チェックして完了扱いにする"}" title="${manual ? "チェックを外して未整理へ戻す" : portalDone ? "スタログ上で完了済み" : "チェックして完了扱いにする"}"${portalDone && !manual ? " disabled" : ""}>✓</button>
-        ${showPriority && !manual && !portalDone ? priorityPill(report.priority) : `<span class="kind-pill">${esc(report.kind || "項目")}</span>`}
+        <button class="task-check${manual ? " is-manual" : digestDone ? " is-digest-done" : deferred ? " is-deferred" : portalDone ? " is-portal-done" : ""}" data-manual-toggle="${esc(report.key)}" type="button" aria-pressed="${manual}" aria-label="${actionLabel}" title="${actionLabel}"${locked && !manual ? " disabled" : ""}>✓</button>
+        ${showPriority && !manual && !locked ? priorityPill(report.priority) : `<span class="kind-pill">${esc(report.kind || "項目")}</span>`}
         <div class="row-main"><strong>${esc(report.title || "名称なし")}</strong><span>${esc(courseName(report.classId))} · ${esc(report.kind || "項目")} · ${esc(contextLabel)}${reason}</span></div>
         ${reportStatus(report)}
         ${link ? `<a class="secondary-button" href="${esc(link)}" target="_blank" rel="noreferrer">開く</a>` : ""}
@@ -406,10 +422,11 @@
   function renderHome() {
     const today = todayCourseBlocks();
     const todayClassIds = new Set(today.map((slot) => String(slot.classId)));
-    const reports = array(state.snapshot.reports).filter((report) => todayClassIds.has(String(report.classId)));
+    const reports = array(state.snapshot.reports).filter((report) => todayClassIds.has(String(report.classId)) && isCountedReport(report));
     const tasks = pendingTasks().filter((report) => todayClassIds.has(String(report.classId)));
     const portalDone = reports.filter(isPortalDone).length;
-    const manualDone = reports.filter((report) => isPortalPending(report) && isManualComplete(report)).length;
+    const digestDone = reports.filter(isDigestAutoComplete).length;
+    const manualDone = reports.filter((report) => isPortalPending(report) && isManualComplete(report) && !isDigestAutoComplete(report)).length;
     const effectiveDone = reports.filter(isEffectivelyDone).length;
     const completion = reports.length ? Math.round(effectiveDone / reports.length * 100) : 0;
     const courses = courseStats().filter((course) => todayClassIds.has(String(course.classId)));
@@ -420,7 +437,7 @@
         <section class="card span-7">${cardHead("今日の科目の全体像", "今日の時間割にある科目だけを集計")}<div class="metric-row three"><div class="metric"><strong>${tasks.length}</strong><span>未完了</span><small>チェック済みを除外</small></div><div class="metric"><strong>${completion}<small>%</small></strong><span>整理済み</span><small>${effectiveDone} / ${reports.length}件</small></div><div class="metric"><strong>${manualDone}</strong><span>手動で完了</span><small>端末内の補正</small></div></div></section>
         ${renderNextCourseCard({ todayOnly: true })}
 
-        <section class="card span-4">${cardHead("課題の整理率", "課題実施による完了と手動完了を合算")}<div style="display:flex;align-items:center;gap:18px"><div class="ring" style="--value:${completion}"><div class="ring-label"><strong>${completion}%</strong><span>整理済み</span></div></div><div style="flex:1"><div class="progress-label"><span>課題を実施して完了</span><strong>${portalDone}</strong></div>${progressBar(reports.length ? portalDone / reports.length * 100 : 0, "good")}<div class="progress-label" style="margin-top:11px"><span>手動で完了</span><strong>${manualDone}</strong></div>${progressBar(reports.length ? manualDone / reports.length * 100 : 0, "warn")}<div class="progress-label" style="margin-top:11px"><span>残り</span><strong>${tasks.length}</strong></div></div></div></section>
+        <section class="card span-4">${cardHead("課題の整理率", "課題実施・D判定・手動完了を合算")}<div style="display:flex;align-items:center;gap:18px"><div class="ring" style="--value:${completion}"><div class="ring-label"><strong>${completion}%</strong><span>整理済み</span></div></div><div style="flex:1"><div class="progress-label"><span>課題を実施して完了</span><strong>${portalDone}</strong></div>${progressBar(reports.length ? portalDone / reports.length * 100 : 0, "good")}<div class="progress-label" style="margin-top:9px"><span>D 60%以上で補講完了</span><strong>${digestDone}</strong></div>${progressBar(reports.length ? digestDone / reports.length * 100 : 0, "good")}<div class="progress-label" style="margin-top:9px"><span>手動で完了</span><strong>${manualDone}</strong></div>${progressBar(reports.length ? manualDone / reports.length * 100 : 0, "warn")}<div class="progress-label" style="margin-top:9px"><span>残り</span><strong>${tasks.length}</strong></div></div></div></section>
 
         <section class="card span-8">${cardHead("今日の授業", today.length ? `${today.length}科目` : "時間割から確認")}<div class="compact-list">${today.map((slot) => `<div class="list-row"><span class="row-icon">${esc(slot.period)}</span><div class="row-main"><strong>${esc(slot.courseName || courseName(slot.classId))}</strong><span>${esc(PERIOD_TIMES[Number(slot.period)]?.start || "時刻不明")} · ${esc(slot.room ? `${slot.room}教室` : "教室未取得")}</span></div><div class="row-meta"><strong>${esc(slot.period)}限</strong></div></div>`).join("") || `<div class="empty-inline">今日の時間割は収集されていません。</div>`}</div></section>
 
@@ -493,7 +510,8 @@
     const dialog = $("#course-dialog");
     dialog.dataset.currentClassId = classId;
     $("#course-dialog-heading").innerHTML = `<p class="eyebrow">COURSE FILE</p><h2>${esc(course.name)}</h2>`;
-    const reports = [...course.ownReports].sort((a, b) => Number(!isEffectivelyDone(a)) - Number(!isEffectivelyDone(b))).reverse();
+    const displayRank = (report) => isEffectivelyPending(report) ? 0 : isDigestDeferred(report) ? 2 : 1;
+    const reports = [...course.ownReports].sort((a, b) => displayRank(a) - displayRank(b));
     const recent = [...course.directories].filter((item) => item.lessonDate).sort((a, b) => String(b.lessonDate).localeCompare(String(a.lessonDate))).slice(0, 8);
     $("#course-dialog-body").innerHTML = `<div class="metric-row"><div class="metric"><strong>${Math.round(course.attendance * 100)}%</strong><span>出席扱い率</span></div><div class="metric"><strong>${course.margin ?? "—"}</strong><span>欠席余裕</span></div><div class="metric"><strong>${course.pending}</strong><span>未整理</span></div><div class="metric"><strong>${course.health}</strong><span>ヘルス</span></div></div><section class="card flat" style="margin-top:16px">${cardHead("ヘルスの内訳", "出席基準と課題整理のみで算出")}${healthBreakdown(course)}</section><div class="bento-grid" style="margin-top:14px"><section class="card flat span-8">${cardHead("課題・テスト", "完了方法とスタログ状態を表示・手動完了も変更可能")}${renderTaskRows(reports, { showPriority: false })}</section><section class="card flat span-4">${cardHead("最近の授業回", `${course.directories.length}回を収集`)}<div class="timeline">${recent.map((item) => `<div class="timeline-row"><span class="timeline-date">${esc(formatDate(item.lessonDate))}</span><span class="timeline-axis"></span><div class="timeline-content"><strong>${esc(item.title || `第${item.lessonNumber || "?"}回`)}</strong></div></div>`).join("") || `<div class="empty-inline">日付つき授業回がありません。</div>`}</div></section></div>`;
     if (!dialog.open) dialog.showModal();
