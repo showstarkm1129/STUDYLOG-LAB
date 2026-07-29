@@ -90,14 +90,18 @@
   }
 
   function dateFromLessonText(value, academicYear) {
-    const full = value.match(/(20\d{2})\s*[年\/.-]\s*(0?[1-9]|1[0-2])\s*[月\/.-]\s*(0?[1-9]|[12]\d|3[01])(?:日)?/);
-    const short = value.match(/(?:^|[^0-9])(\d{1,2})\s*[月\/.]\s*(\d{1,2})(?:日)?/);
-    const match = full || short;
+    const normalizedValue = String(value || "").normalize("NFKC");
+    const full = normalizedValue.match(/(20\d{2})\s*[年\/.-]\s*(0?[1-9]|1[0-2])\s*[月\/.-]\s*(0?[1-9]|[12]\d|3[01])(?:日)?/);
+    const short = normalizedValue.match(/(?:^|[^0-9])(\d{1,2})\s*[月\/.]\s*(\d{1,2})(?:日)?/);
+    const compact = normalizedValue.match(/(?:^|[_\s(（])(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(?=$|[_\s)）])/);
+    const match = full || short || compact;
     if (!match) return undefined;
     const month = Number(match[full ? 2 : 1]);
     const day = Number(match[full ? 3 : 2]);
     if (month < 1 || month > 12 || day < 1 || day > 31) return undefined;
     const year = full ? Number(match[1]) : academicYear + (month < 4 ? 1 : 0);
+    const date = new Date(year, month - 1, day);
+    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return undefined;
     return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   }
 
@@ -673,6 +677,49 @@
     return courseMap(snapshot).get(String(classId))?.name || `科目 ${classId || "不明"}`;
   }
 
+  function unitExamForSlot(snapshot, slot) {
+    if (!slot?.date || !slot?.classId) return null;
+    const academicYear = Number(snapshot.academicYear || new Date().getFullYear());
+    return array(snapshot.directories).find((directory) => {
+      if (String(directory.classId) !== String(slot.classId) || !String(directory.title || "").normalize("NFKC").includes("単位認定試験")) return false;
+      const lessonDate = directory.lessonDate || dateFromLessonText(directory.title, academicYear);
+      return lessonDate === slot.date;
+    }) || null;
+  }
+
+  function unitExamLabel() {
+    return '<em class="stalog-unit-exam-label">重要：単位認定試験</em>';
+  }
+
+  function timetableCourseLine(slot, snapshot, { showTime = false } = {}) {
+    const exam = unitExamForSlot(snapshot, slot);
+    const meta = showTime
+      ? `${PERIOD_TIMES[Number(slot.period)]?.start || ""} · ${slot.room ? `${slot.room}教室` : "教室未取得"}`
+      : slot.room || "教室未取得";
+    return `<div class="stalog-context-line${exam ? " stalog-context-unit-exam" : ""}"><strong>${escapeHtml(slot.period)}限 ${escapeHtml(slot.courseName || courseName(snapshot, slot.classId))}${exam ? unitExamLabel() : ""}</strong><span>${escapeHtml(meta)}</span></div>`;
+  }
+
+  function markUnitExamTimetable(snapshot) {
+    if (isQuizScreen()) return;
+    const firstCell = document.querySelector(".top-timetable-table-td");
+    const table = firstCell?.closest("table");
+    if (!table) return;
+    const grid = tableGrid(table);
+    const examHeaders = new Set();
+    const slots = readNormalizedTimetable(snapshot.timetableWeekStart?.startDate);
+    slots.forEach((slot) => {
+      const cell = grid[slot.rowIndex]?.[slot.columnIndex];
+      if (!cell) return;
+      const exam = unitExamForSlot(snapshot, slot);
+      cell.classList.toggle("stalog-unit-exam-cell", Boolean(exam));
+      if (!exam) return;
+      const header = grid.slice(0, slot.rowIndex).map((row) => row[slot.columnIndex]).reverse().find((candidate) => dateFromLabel(text(candidate)));
+      if (header) examHeaders.add(header);
+    });
+    const currentHeaders = table.querySelectorAll(".stalog-unit-exam-day");
+    new Set([...currentHeaders, ...examHeaders]).forEach((header) => header.classList.toggle("stalog-unit-exam-day", examHeaders.has(header)));
+  }
+
   function portalPendingReports(snapshot, preferences, filters = {}) {
     return array(snapshot.reports).filter((report) => {
       if (!isPortalPending(report) || isDigestAutoComplete(report, snapshot) || isDigestDeferred(report, snapshot)) return false;
@@ -697,6 +744,7 @@
     }
     if (scene === "mypage") return `未整理 ${pendingReports(snapshot, preferences).length}件`;
     const next = nextDifferentCourse(snapshot, new Date(), { todayOnly: scene === "top" });
+    if (unitExamForSlot(snapshot, next)) return `重要：単位認定試験 · ${next.courseName || courseName(snapshot, next.classId)}`;
     if (next) return `次: ${next.courseName || courseName(snapshot, next.classId)} ${PERIOD_TIMES[Number(next.period)].start}`;
     return "Stalog Dashboard";
   }
@@ -721,7 +769,8 @@
     const next = nextDifferentCourse(snapshot, new Date(), { todayOnly });
     if (!next) return `<div class="stalog-context-feature"><span>次の科目</span><strong>${todayOnly ? "今日の授業は終了" : "判定できません"}</strong><small>${todayOnly ? "次の授業日は表示しません" : "次の授業日を含む時間割を収集してください"}</small></div>`;
     const time = PERIOD_TIMES[Number(next.period)];
-    return `<div class="stalog-context-feature stalog-context-next"><span>次の科目</span><strong>${escapeHtml(next.courseName || courseName(snapshot, next.classId))}</strong><small>${escapeHtml(next.period)}限 ${escapeHtml(time.start)} · ${escapeHtml(next.room ? `${next.room}教室` : "教室未取得")}</small></div>`;
+    const exam = unitExamForSlot(snapshot, next);
+    return `<div class="stalog-context-feature stalog-context-next${exam ? " stalog-context-unit-exam" : ""}"><span>次の科目</span>${exam ? unitExamLabel() : ""}<strong>${escapeHtml(next.courseName || courseName(snapshot, next.classId))}</strong><small>${escapeHtml(next.period)}限 ${escapeHtml(time.start)} · ${escapeHtml(next.room ? `${next.room}教室` : "教室未取得")}</small></div>`;
   }
 
   function progressBlock(snapshot, preferences, classIds = null) {
@@ -750,8 +799,8 @@
     const todayClassIds = new Set(today.map((slot) => String(slot.classId)));
     const todayPending = allPending.filter((report) => todayClassIds.has(String(report.classId)));
     if (!snapshot.collectedAt) return `<p class="stalog-context-empty">まだ収集していません。「取得して保存」を押してください。</p>`;
-    if (scene === "top") return `${nextCourseBlock(snapshot, { todayOnly: true })}${progressBlock(snapshot, preferences, todayClassIds)}<h3>今日の授業</h3><div class="stalog-context-list">${today.slice(0, 4).map((slot) => `<div class="stalog-context-line"><strong>${escapeHtml(slot.period)}限 ${escapeHtml(slot.courseName || courseName(snapshot, slot.classId))}</strong><span>${escapeHtml(slot.room || "教室未取得")}</span></div>`).join("") || `<p class="stalog-context-empty">今日の時間割はありません。</p>`}</div><h3>次に確認する候補</h3>${taskRows(todayPending, snapshot, preferences, { showChecked: false })}`;
-    if (scene === "schedule") return `${nextCourseBlock(snapshot)}<h3>今日の授業</h3><div class="stalog-context-list">${today.map((slot) => `<div class="stalog-context-line"><strong>${escapeHtml(slot.period)}限 ${escapeHtml(slot.courseName || courseName(snapshot, slot.classId))}</strong><span>${escapeHtml(PERIOD_TIMES[Number(slot.period)]?.start || "")} · ${escapeHtml(slot.room || "教室未取得")}</span></div>`).join("") || `<p class="stalog-context-empty">今日の時間割はありません。</p>`}</div>`;
+    if (scene === "top") return `${nextCourseBlock(snapshot, { todayOnly: true })}${progressBlock(snapshot, preferences, todayClassIds)}<h3>今日の授業</h3><div class="stalog-context-list">${today.slice(0, 4).map((slot) => timetableCourseLine(slot, snapshot)).join("") || `<p class="stalog-context-empty">今日の時間割はありません。</p>`}</div><h3>次に確認する候補</h3>${taskRows(todayPending, snapshot, preferences, { showChecked: false })}`;
+    if (scene === "schedule") return `${nextCourseBlock(snapshot)}<h3>今日の授業</h3><div class="stalog-context-list">${today.map((slot) => timetableCourseLine(slot, snapshot, { showTime: true })).join("") || `<p class="stalog-context-empty">今日の時間割はありません。</p>`}</div>`;
     if (scene === "mypage") return `${progressBlock(snapshot, preferences)}<h3>スタログ上の未完了</h3>${taskRows(allPending, snapshot, preferences, { limit: 5 })}`;
     if (scene === "class") return `${courseBlock(course, snapshot)}<h3>この科目の未整理</h3>${taskRows(coursePending, snapshot, preferences)}<button class="stalog-context-wide" type="button" data-action="dashboard" data-view="courses">科目カルテを開く</button>`;
     if (scene === "directory") return `<h3>同じ授業のほかの回</h3>${taskRows(otherCoursePending, snapshot, preferences)}<button class="stalog-context-wide" type="button" data-action="dashboard" data-view="courses">科目カルテを開く</button>`;
@@ -778,6 +827,7 @@
     root.querySelector('[data-action="dashboard"][data-footer]').dataset.view = dashboardView(scene);
     const updated = snapshot.collectedAt ? new Date(snapshot.collectedAt).toLocaleString("ja-JP") : "未取得";
     root.querySelector("#stalog-bridge-status").textContent = `最終取得: ${updated}`;
+    markUnitExamTimetable(snapshot);
   }
 
   function installUi() {

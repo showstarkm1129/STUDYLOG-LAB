@@ -53,6 +53,8 @@ let browser;
   assert.equal(await page.locator(".nav-item").count(), 4);
   const homeText = await page.locator("#app-view").innerText();
   assert.doesNotMatch(homeText, /欠席余裕2回以下|出席アラート/);
+  assert.equal(await page.locator(".list-row.is-unit-exam").count(), 1, "only today's exact date + unit exam match should be emphasized");
+  assert.match(await page.locator(".list-row.is-unit-exam").innerText(), /Webアプリ基礎S[\s\S]*重要：単位認定試験/);
   const todayCourseIds = await page.locator("[data-today-courses] [data-course-open]").evaluateAll((items) => items.map((item) => item.dataset.courseOpen));
   const todayCandidateIds = await page.locator("[data-today-candidates] [data-manual-toggle]").evaluateAll((items) => items.map((item) => item.dataset.manualToggle.split("::")[0]));
   assert(todayCandidateIds.every((classId) => todayCourseIds.includes(classId)), "home candidates must belong to today's courses");
@@ -115,6 +117,10 @@ let browser;
   assert.match(await page.locator("#data-quality").innerText(), /科目情報/);
   await page.mouse.click(5, 5);
   assert.equal(await page.locator("#data-dialog").evaluate((dialog) => dialog.open), false, "data dialog should close from a backdrop click");
+
+  await page.goto(`http://127.0.0.1:${port}/dashboard.html?now=2026-07-29T08:30:00`, { waitUntil: "networkidle" });
+  await page.waitForSelector(".next-course-card.is-unit-exam");
+  assert.match(await page.locator(".next-course-card.is-unit-exam").innerText(), /重要：単位認定試験[\s\S]*Webアプリ基礎S/);
 
   assert.deepEqual(errors, [], `browser errors:\n${errors.join("\n")}`);
   await browser.close();

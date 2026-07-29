@@ -18,6 +18,16 @@
   if (new URLSearchParams(location.search).get("quizDom") === "1") {
     document.querySelector("#portal-fixture").insertAdjacentHTML("beforeend", '<div id="div-quiz-question">quiz</div>');
   }
+  if (location.pathname === "/lms/") {
+    document.querySelector("#portal-fixture").insertAdjacentHTML("beforeend", `
+      <table id="div-top-timetable">
+        <thead><tr><th>時限</th><th>7/28</th><th>7/29</th><th>7/30</th></tr></thead>
+        <tbody>
+          <tr><th>1限</th><td class="top-timetable-table-td"><a href="/lms/class/10184/">オブジェクト指向設計</a> 教室 : 902A</td><td class="top-timetable-table-td"><a href="/lms/class/10067/">Webアプリ基礎S</a> 教室 : 603</td><td class="top-timetable-table-td"><a href="/lms/class/10171/">LinuxⅠ</a> 教室 : 601</td></tr>
+          <tr><th>4限</th><td></td><td class="top-timetable-table-td"><a href="/lms/class/10019/">簿記入門a</a> 教室 : 603</td><td class="top-timetable-table-td"><a href="/lms/class/10175/">データベース</a> 教室 : 601</td></tr>
+        </tbody>
+      </table>`);
+  }
 
   window.chrome = {
     storage: {

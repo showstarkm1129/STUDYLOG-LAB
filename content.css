@@ -133,6 +133,39 @@
 
 .stalog-context-feature > strong { font-size: 19px; line-height: 1.35; margin: 2px 0; }
 .stalog-context-next { background: #f2f7d9; }
+.stalog-context-unit-exam {
+  background: #fff0f1 !important;
+  border: 2px solid #c63b48 !important;
+  box-shadow: 0 5px 16px rgba(159, 35, 49, .14);
+}
+.stalog-unit-exam-label {
+  background: #b82335;
+  border-radius: 999px;
+  color: #fff;
+  display: inline-block;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+  letter-spacing: .02em;
+  margin: 3px 0 2px;
+  padding: 3px 7px;
+  width: max-content;
+}
+.stalog-context-line .stalog-unit-exam-label { display: block; }
+
+.top-timetable-table-td.stalog-unit-exam-cell {
+  background: #fff0f1 !important;
+  border: 2px solid #c63b48 !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .7), 0 3px 10px rgba(159, 35, 49, .15) !important;
+  color: #731d29 !important;
+  position: relative;
+}
+.top-timetable-table-td.stalog-unit-exam-cell a { color: #a1192c !important; font-weight: 900 !important; }
+.stalog-unit-exam-day {
+  background: #b82335 !important;
+  color: #fff !important;
+  font-weight: 900 !important;
+}
 
 .stalog-context-metrics {
   display: grid;

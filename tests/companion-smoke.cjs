@@ -54,6 +54,11 @@ const server = http.createServer((request, response) => {
   assert(topCandidateIds.length > 0, "today brief should contain today's unfinished items");
   assert(topCandidateIds.every((classId) => ["10067", "10019", "10174"].includes(classId)), "today brief candidates must belong to today's courses");
   assert.equal(await page.locator('#stalog-context-body [data-checked="true"]').count(), 0);
+  assert.match(topText, /重要：単位認定試験/);
+  assert.equal(await page.locator(".top-timetable-table-td.stalog-unit-exam-cell").count(), 3, "only exact date + unit exam matches should change calendar color");
+  assert.equal(await page.locator(".stalog-unit-exam-calendar-badge").count(), 0, "calendar emphasis must not inject text that shifts the timetable layout");
+  assert.equal(await page.locator('a[href="/lms/class/10019/"]').locator("..").evaluate((cell) => cell.classList.contains("stalog-unit-exam-cell")), false, "an exam title without a date must not be emphasized");
+  assert.equal(await page.locator("th.stalog-unit-exam-day").count(), 3, "exam dates should be emphasized in the calendar header");
   await page.locator("#stalog-bridge-toggle").click();
   const completedFromBrief = await page.locator("#stalog-context-body [data-context-manual]").first().getAttribute("data-context-manual");
   await page.locator("#stalog-context-body [data-context-manual]").first().click();

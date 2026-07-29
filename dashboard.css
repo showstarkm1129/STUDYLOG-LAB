@@ -234,6 +234,10 @@ kbd { background: var(--surface-strong); border: 1px solid var(--line); border-r
 .hero-number small { font-size: 12px; letter-spacing: 0; margin-left: 5px; }
 
 .next-course-card { min-height: 205px; }
+.next-course-card.is-unit-exam {
+  background: linear-gradient(135deg, #741c2a, #b4263a);
+  box-shadow: 0 12px 34px rgba(151, 27, 46, .24);
+}
 .next-course-card h3 { font-size: clamp(20px, 2.2vw, 29px); letter-spacing: -.045em; line-height: 1.2; margin: 7px 0 5px; }
 .next-course-when { color: var(--accent) !important; font-size: 11px; font-weight: 900; margin: 12px 0 0; }
 .next-course-meta { color: color-mix(in srgb, var(--surface) 66%, transparent); font-size: 10px; margin: 0 0 13px; }
@@ -273,6 +277,21 @@ kbd { background: var(--surface-strong); border: 1px solid var(--line); border-r
   padding: 10px 11px;
 }
 .list-row { grid-template-columns: auto minmax(0, 1fr) auto; }
+.list-row.is-unit-exam { background: var(--danger-soft); border-color: color-mix(in srgb, var(--danger) 46%, var(--line)); }
+.list-row.is-unit-exam .row-icon { background: var(--danger); color: #fff; }
+.unit-exam-badge {
+  background: var(--danger);
+  border-radius: 999px;
+  color: #fff !important;
+  display: inline-block !important;
+  font-size: 8px !important;
+  font-weight: 900;
+  line-height: 1.2;
+  margin: 5px 0 1px !important;
+  padding: 4px 7px;
+  width: max-content;
+}
+.next-course-card .unit-exam-badge { background: #fff; color: #8c2031 !important; font-size: 9px !important; margin-top: 10px !important; }
 .list-row:hover, .course-row:hover { border-color: var(--line); }
 .row-icon { align-items: center; background: var(--surface-strong); border-radius: 8px; display: inline-flex; font-size: 13px; height: 31px; justify-content: center; width: 31px; }
 .row-main { min-width: 0; }

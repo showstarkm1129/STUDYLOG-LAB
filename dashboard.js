@@ -335,6 +335,33 @@
       .sort((a, b) => String(a.date).localeCompare(String(b.date)) || Number(a.period) - Number(b.period));
   }
 
+  function unitExamDirectoryDate(directory) {
+    if (directory?.lessonDate) return String(directory.lessonDate);
+    const title = String(directory?.title || "").normalize("NFKC");
+    const compact = title.match(/(?:^|[_\s(（])(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(?=$|[_\s)）])/);
+    if (!compact) return null;
+    const month = Number(compact[1]);
+    const day = Number(compact[2]);
+    const academicYear = Number(state.snapshot?.academicYear || dashboardNow().getFullYear());
+    const year = academicYear + (month < 4 ? 1 : 0);
+    const date = new Date(year, month - 1, day);
+    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+    return isoDay(date);
+  }
+
+  function unitExamForSlot(slot) {
+    if (!slot?.date || !slot?.classId) return null;
+    return array(state.snapshot?.directories).find((directory) =>
+      String(directory.classId) === String(slot.classId)
+      && String(directory.title || "").normalize("NFKC").includes("単位認定試験")
+      && unitExamDirectoryDate(directory) === slot.date
+    ) || null;
+  }
+
+  function unitExamBadge() {
+    return '<span class="unit-exam-badge">重要：単位認定試験</span>';
+  }
+
   function firstDifferentCourse(slots, startIndex, classId) {
     return slots.slice(startIndex).find((slot) => String(slot.classId) !== String(classId));
   }
@@ -389,8 +416,9 @@
     const slot = nextCourse.slot;
     const time = PERIOD_TIMES[Number(slot.period)];
     const href = slot.classId ? `${PORTAL_ORIGIN}/lms/class/${encodeURIComponent(slot.classId)}/` : "";
-    return `<section class="card hero-card next-course-card span-5" data-next-course-card data-next-class-id="${esc(slot.classId || "")}">
-      <div>${cardHead("次の科目", "同じ科目の連続時限は飛ばして表示")}<p class="next-course-when">${esc(nextCourseTiming(nextCourse))} · ${esc(formatDate(slot.date))}</p><h3>${esc(slot.courseName || courseName(slot.classId))}</h3><p class="next-course-meta">${esc(slot.period)}限 ${esc(time.start)}開始${slot.room ? ` · ${esc(slot.room)}教室` : ""}</p>${href ? `<a class="next-course-link" href="${esc(href)}" target="_blank" rel="noreferrer">科目を開く →</a>` : ""}</div>
+    const exam = unitExamForSlot(slot);
+    return `<section class="card hero-card next-course-card span-5${exam ? " is-unit-exam" : ""}" data-next-course-card data-next-class-id="${esc(slot.classId || "")}">
+      <div>${cardHead("次の科目", "同じ科目の連続時限は飛ばして表示")}${exam ? unitExamBadge() : ""}<p class="next-course-when">${esc(nextCourseTiming(nextCourse))} · ${esc(formatDate(slot.date))}</p><h3>${esc(slot.courseName || courseName(slot.classId))}</h3><p class="next-course-meta">${esc(slot.period)}限 ${esc(time.start)}開始${slot.room ? ` · ${esc(slot.room)}教室` : ""}</p>${href ? `<a class="next-course-link" href="${esc(href)}" target="_blank" rel="noreferrer">科目を開く →</a>` : ""}</div>
       <div class="next-course-clock"><strong>${esc(slot.period)}</strong><span>限</span></div>
     </section>`;
   }
@@ -439,7 +467,7 @@
 
         <section class="card span-4">${cardHead("課題の整理率", "課題実施・D判定・手動完了を合算")}<div style="display:flex;align-items:center;gap:18px"><div class="ring" style="--value:${completion}"><div class="ring-label"><strong>${completion}%</strong><span>整理済み</span></div></div><div style="flex:1"><div class="progress-label"><span>課題を実施して完了</span><strong>${portalDone}</strong></div>${progressBar(reports.length ? portalDone / reports.length * 100 : 0, "good")}<div class="progress-label" style="margin-top:9px"><span>D 60%以上で補講完了</span><strong>${digestDone}</strong></div>${progressBar(reports.length ? digestDone / reports.length * 100 : 0, "good")}<div class="progress-label" style="margin-top:9px"><span>手動で完了</span><strong>${manualDone}</strong></div>${progressBar(reports.length ? manualDone / reports.length * 100 : 0, "warn")}<div class="progress-label" style="margin-top:9px"><span>残り</span><strong>${tasks.length}</strong></div></div></div></section>
 
-        <section class="card span-8">${cardHead("今日の授業", today.length ? `${today.length}科目` : "時間割から確認")}<div class="compact-list">${today.map((slot) => `<div class="list-row"><span class="row-icon">${esc(slot.period)}</span><div class="row-main"><strong>${esc(slot.courseName || courseName(slot.classId))}</strong><span>${esc(PERIOD_TIMES[Number(slot.period)]?.start || "時刻不明")} · ${esc(slot.room ? `${slot.room}教室` : "教室未取得")}</span></div><div class="row-meta"><strong>${esc(slot.period)}限</strong></div></div>`).join("") || `<div class="empty-inline">今日の時間割は収集されていません。</div>`}</div></section>
+        <section class="card span-8">${cardHead("今日の授業", today.length ? `${today.length}科目` : "時間割から確認")}<div class="compact-list">${today.map((slot) => { const exam = unitExamForSlot(slot); return `<div class="list-row${exam ? " is-unit-exam" : ""}"><span class="row-icon">${esc(slot.period)}</span><div class="row-main"><strong>${esc(slot.courseName || courseName(slot.classId))}</strong>${exam ? unitExamBadge() : ""}<span>${esc(PERIOD_TIMES[Number(slot.period)]?.start || "時刻不明")} · ${esc(slot.room ? `${slot.room}教室` : "教室未取得")}</span></div><div class="row-meta"><strong>${esc(slot.period)}限</strong></div></div>`; }).join("") || `<div class="empty-inline">今日の時間割は収集されていません。</div>`}</div></section>
 
         <section class="card span-7" data-today-candidates>${cardHead("次に確認する候補", "今日の科目にある未完了だけを表示")}${renderTaskRows(tasks, { limit: 3 })}</section>
         <section class="card span-5" data-today-courses>${cardHead("今日の科目ヘルス", "今日の科目だけを表示")}<div class="compact-list">${[...courses].sort((a, b) => a.health - b.health).map((course) => `<button class="list-row" style="border:0;width:100%;text-align:left;cursor:pointer" data-course-open="${esc(course.classId)}" type="button"><span class="row-icon" style="color:${colorForCourse(course.classId)}">●</span><div class="row-main"><strong>${esc(course.name)}</strong><span>出席 ${course.attendancePoints}/50 · 課題 ${course.taskPoints}/50</span></div><div class="row-meta"><strong>${course.health}</strong><span>/ 100</span></div></button>`).join("") || `<div class="empty-inline">今日の科目はありません。</div>`}</div></section>
