@@ -316,6 +316,8 @@ kbd { background: var(--surface-strong); border: 1px solid var(--line); border-r
 .task-check.is-portal-done { background: var(--good-soft); border-color: var(--good); color: var(--good); cursor: default; opacity: .72; }
 .task-row.is-manual { background: #f4f8f5; }
 .manual-pill { background: var(--purple-soft); border-radius: 999px; color: var(--purple); display: inline-block; font-size: 8px; font-weight: 900; padding: 4px 7px; white-space: nowrap; }
+.completion-state { align-items: flex-end; display: grid; gap: 3px; justify-items: end; min-width: 92px; }
+.completion-state small { color: var(--muted); font-size: 7px; max-width: 125px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-reason { color: var(--warn); font-size: 8px; font-weight: 800; }
 .tiny-action { background: transparent; border: 0; color: var(--muted); cursor: pointer; font-size: 14px; padding: 3px; }
 .tiny-action:hover { color: var(--brand); }

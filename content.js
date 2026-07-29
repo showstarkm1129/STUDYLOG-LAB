@@ -693,7 +693,7 @@
       const href = String(report.href || "").startsWith("/") ? report.href : "";
       const completed = isManualComplete(report, preferences);
       const label = completed ? "チェックを外して未整理へ戻す" : "チェックして完了扱いにする";
-      return `<div class="stalog-context-task" data-manual-complete="${completed}"><button class="stalog-context-check" type="button" data-context-manual="${escapeHtml(reportKey(report))}" data-checked="${completed}" aria-pressed="${completed}" aria-label="${label}" title="${label}">✓</button><div><strong>${escapeHtml(report.title || "名称なし")}</strong><span>${escapeHtml(courseName(snapshot, report.classId))} · ${escapeHtml(report.status || "状態なし")}${completed ? " · 手動完了" : ""}</span></div>${href ? `<a href="${escapeHtml(href)}">開く</a>` : ""}</div>`;
+      return `<div class="stalog-context-task" data-manual-complete="${completed}"><button class="stalog-context-check" type="button" data-context-manual="${escapeHtml(reportKey(report))}" data-checked="${completed}" aria-pressed="${completed}" aria-label="${label}" title="${label}">✓</button><div><strong>${escapeHtml(report.title || "名称なし")}</strong><span>${escapeHtml(courseName(snapshot, report.classId))} · ${escapeHtml(report.status || "状態なし")}${completed ? " · 手動で完了" : ""}</span></div>${href ? `<a href="${escapeHtml(href)}">開く</a>` : ""}</div>`;
     }).join("")}<div class="stalog-context-list-summary">未整理 ${unchecked.length}件 · チェック済み ${checked.length}件</div></div>`;
   }
 
