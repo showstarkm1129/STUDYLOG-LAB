@@ -31,9 +31,15 @@
     const before = doc.querySelector("#sim-rate").textContent;
     doc.querySelector('[data-sim-step="1"]').click();
     await waitFor(() => doc.querySelector("#sim-rate").textContent !== before, "simulator stepper did not update");
+    const activeAttendanceRows = doc.querySelectorAll(".attendance-table tbody tr").length;
+    doc.querySelector('[data-toggle-archives="attendance"]').click();
+    await waitFor(() => doc.querySelectorAll(".attendance-table tbody tr").length > activeAttendanceRows, "archived attendance rows did not appear");
 
     doc.querySelector('[data-view="courses"]').click();
     await waitFor(() => doc.querySelector("[data-course-open]"), "course cards did not render");
+    const activeCourseCards = doc.querySelectorAll(".course-card").length;
+    doc.querySelector('[data-toggle-archives="courses"]').click();
+    await waitFor(() => doc.querySelectorAll(".course-card").length > activeCourseCards, "archived course cards did not appear");
     doc.querySelector("[data-course-open]").click();
     await waitFor(() => doc.querySelector("#course-dialog").open, "course dialog did not open");
 

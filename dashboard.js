@@ -22,6 +22,8 @@
     prefs: { ...defaultPreferences },
     view: "home",
     taskFilter: "pending",
+    showArchivedAttendance: false,
+    showArchivedCourses: false,
     simulatorCourseId: null,
     simulatorAbsences: 0
   };
@@ -151,6 +153,34 @@
     return maximumAbsences - Number(course.absent || 0);
   }
 
+  function courseEndDate(course) {
+    const matches = [...String(course.period || "").normalize("NFKC").matchAll(/(?:(20\d{2})\s*[\/年.\-]\s*)?(\d{1,2})\s*[\/月.\-]\s*(\d{1,2})/g)];
+    const last = matches.at(-1);
+    if (last) {
+      const month = Number(last[2]);
+      const day = Number(last[3]);
+      const academicYear = Number(state.snapshot?.academicYear || dashboardNow().getFullYear());
+      const year = Number(last[1] || academicYear + (month <= 3 ? 1 : 0));
+      const date = new Date(year, month - 1, day);
+      if (date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day) return date;
+    }
+    const lessonDates = array(state.snapshot?.directories)
+      .filter((item) => String(item.classId) === String(course.classId))
+      .map((item) => parseDate(item.lessonDate))
+      .filter(Boolean)
+      .sort((a, b) => b - a);
+    return lessonDates[0] || null;
+  }
+
+  function isCourseArchived(course, now = dashboardNow()) {
+    const endDate = courseEndDate(course);
+    if (!endDate) return false;
+    const archiveAt = new Date(endDate);
+    archiveAt.setDate(archiveAt.getDate() + 1);
+    archiveAt.setHours(0, 0, 0, 0);
+    return now >= archiveAt;
+  }
+
   function courseStats() {
     const reports = array(state.snapshot?.reports);
     const directories = array(state.snapshot?.directories);
@@ -164,6 +194,7 @@
       const hasAttendance = Number(course.attended || 0) + Number(course.absent || 0) + Number(course.publicAbsent || 0) > 0;
       const attendancePoints = hasAttendance ? Math.round(clamp(attendance / ATTENDANCE_THRESHOLD, 0, 1) * 50) : 0;
       const taskPoints = Math.round(completion * 50);
+      const endDate = courseEndDate(course);
       return {
         ...course,
         ownReports,
@@ -178,9 +209,16 @@
         taskPoints,
         health: attendancePoints + taskPoints,
         margin: absenceMargin(course),
+        endDate,
+        archived: isCourseArchived(course),
         directories: directories.filter((item) => String(item.classId) === String(course.classId))
       };
     });
+  }
+
+  function archiveToggle(scope, archivedCount, showing) {
+    if (!archivedCount) return "";
+    return `<button class="secondary-button" data-toggle-archives="${esc(scope)}" type="button">${showing ? "アーカイブを隠す" : `アーカイブ ${archivedCount}科目を表示`}</button>`;
   }
 
   function enrichReport(report) {
@@ -370,7 +408,8 @@
     const manualDone = reports.filter((report) => isPortalPending(report) && isManualComplete(report)).length;
     const effectiveDone = reports.filter(isEffectivelyDone).length;
     const completion = reports.length ? Math.round(effectiveDone / reports.length * 100) : 0;
-    const courses = courseStats();
+    const allCourses = courseStats();
+    const courses = allCourses.filter((course) => !course.archived);
     const atRisk = courses.filter((course) => course.margin !== null && course.margin <= 2).sort((a, b) => a.margin - b.margin);
     const today = todayCourseBlocks();
     const now = dashboardNow();
@@ -387,7 +426,7 @@
         <section class="card span-4">${cardHead("出席アラート", "全科目共通75%・公欠は出席扱い")}<div class="compact-list">${atRisk.slice(0, 4).map((course) => `<div class="list-row"><span class="row-icon">!</span><div class="row-main"><strong>${esc(course.name)}</strong><span>出席扱い ${Math.round(course.attendance * 100)}% · 欠席${course.absent || 0}回</span></div><div class="row-meta"><strong class="${course.margin < 0 ? "text-danger" : "text-warn"}">${course.margin < 0 ? `${Math.abs(course.margin)}回超過` : `残${course.margin}回`}</strong></div></div>`).join("") || `<div class="empty-inline">欠席余裕2回以下の科目はありません。</div>`}</div></section>
 
         <section class="card span-7">${cardHead("次に確認する候補", "判断理由を表示・手動完了で除外可能")}${renderTaskRows(tasks, { limit: 3 })}</section>
-        <section class="card span-5">${cardHead("科目ヘルス", "出席基準50点＋課題整理50点")}<div class="compact-list">${[...courses].sort((a, b) => a.health - b.health).slice(0, 5).map((course) => `<button class="list-row" style="border:0;width:100%;text-align:left;cursor:pointer" data-course-open="${esc(course.classId)}" type="button"><span class="row-icon" style="color:${colorForCourse(course.classId)}">●</span><div class="row-main"><strong>${esc(course.name)}</strong><span>出席 ${course.attendancePoints}/50 · 課題 ${course.taskPoints}/50</span></div><div class="row-meta"><strong>${course.health}</strong><span>/ 100</span></div></button>`).join("")}</div></section>
+        <section class="card span-5">${cardHead("科目ヘルス", "出席基準50点＋課題整理50点")}<div class="compact-list">${[...courses].sort((a, b) => a.health - b.health).slice(0, 5).map((course) => `<button class="list-row" style="border:0;width:100%;text-align:left;cursor:pointer" data-course-open="${esc(course.classId)}" type="button"><span class="row-icon" style="color:${colorForCourse(course.classId)}">●</span><div class="row-main"><strong>${esc(course.name)}</strong><span>出席 ${course.attendancePoints}/50 · 課題 ${course.taskPoints}/50</span></div><div class="row-meta"><strong>${course.health}</strong><span>/ 100</span></div></button>`).join("") || `<div class="empty-inline">実施中の科目はありません。</div>`}</div></section>
         <section class="card span-12">${cardHead("データ品質", "不足データが影響する機能まで表示")}${renderQuality()}</section>
       </div>`;
   }
@@ -402,7 +441,7 @@
   }
 
   function simulatorCourse() {
-    const courses = courseStats();
+    const courses = courseStats().filter((course) => state.showArchivedAttendance || !course.archived);
     return courses.find((course) => String(course.classId) === String(state.simulatorCourseId)) || courses[0] || null;
   }
 
@@ -422,27 +461,32 @@
     const course = simulatorCourse();
     if (!course) return `<div class="empty-inline">科目データがありません。</div>`;
     const projection = simulatorProjection(course);
-    return `<div class="simulator"><label>科目<select id="sim-course">${courseStats().map((item) => `<option value="${esc(item.classId)}"${String(item.classId) === String(course.classId) ? " selected" : ""}>${esc(item.name)}</option>`).join("")}</select></label><label>残り${projection.remaining}回のうち、今後休む回数</label><div class="stepper"><button data-sim-step="-1" type="button" aria-label="欠席回数を減らす">−</button><output id="sim-absence-label">${projection.selectedAbsences}回</output><button data-sim-step="1" type="button" aria-label="欠席回数を増やす">＋</button></div><input id="sim-absence" type="range" min="0" max="${projection.remaining}" value="${projection.selectedAbsences}"><div class="sim-result"><span><strong id="sim-rate">${Math.round(projection.rate * 100)}%</strong><small class="muted" style="display:block">残りをそれ以外すべて出席した場合</small></span><span id="sim-judgement" class="status-pill ${projection.rate >= ATTENDANCE_THRESHOLD ? "done" : "pending"}">${projection.rate >= ATTENDANCE_THRESHOLD ? "75%以上" : "75%未満"}</span></div></div>`;
+    const selectable = courseStats().filter((item) => state.showArchivedAttendance || !item.archived);
+    return `<div class="simulator"><label>科目<select id="sim-course">${selectable.map((item) => `<option value="${esc(item.classId)}"${String(item.classId) === String(course.classId) ? " selected" : ""}>${esc(item.name)}${item.archived ? "（アーカイブ）" : ""}</option>`).join("")}</select></label><label>残り${projection.remaining}回のうち、今後休む回数</label><div class="stepper"><button data-sim-step="-1" type="button" aria-label="欠席回数を減らす">−</button><output id="sim-absence-label">${projection.selectedAbsences}回</output><button data-sim-step="1" type="button" aria-label="欠席回数を増やす">＋</button></div><input id="sim-absence" type="range" min="0" max="${projection.remaining}" value="${projection.selectedAbsences}"><div class="sim-result"><span><strong id="sim-rate">${Math.round(projection.rate * 100)}%</strong><small class="muted" style="display:block">残りをそれ以外すべて出席した場合</small></span><span id="sim-judgement" class="status-pill ${projection.rate >= ATTENDANCE_THRESHOLD ? "done" : "pending"}">${projection.rate >= ATTENDANCE_THRESHOLD ? "75%以上" : "75%未満"}</span></div></div>`;
   }
 
   function renderAttendance() {
-    const courses = courseStats().sort((a, b) => (a.margin ?? 999) - (b.margin ?? 999));
+    const allCourses = courseStats();
+    const archivedCount = allCourses.filter((course) => course.archived).length;
+    const courses = allCourses.filter((course) => state.showArchivedAttendance || !course.archived).sort((a, b) => (a.margin ?? 999) - (b.margin ?? 999));
     const attended = sum(courses, (course) => Number(course.attended || 0) + Number(course.publicAbsent || 0));
     const absent = sum(courses, (course) => course.absent);
     const overall = attended + absent ? attended / (attended + absent) : 0;
-    return pageHeader("ATTENDANCE", "出席の安全余裕", "全科目75%必須・公欠は出席として計算") +
+    return pageHeader("ATTENDANCE", "出席の安全余裕", "全科目75%必須・公欠は出席として計算", archiveToggle("attendance", archivedCount, state.showArchivedAttendance)) +
       `<div class="bento-grid"><section class="card span-4 tint-brand">${cardHead("全科目の出席扱い率", `出席＋公欠 ${attended} / 欠席 ${absent}`)}<div style="display:flex;align-items:center;gap:20px"><div class="ring tint" style="--value:${Math.round(overall * 100)}"><div class="ring-label"><strong>${Math.round(overall * 100)}%</strong><span>現在</span></div></div><div><strong style="font-size:31px">${courses.filter((course) => course.margin !== null && course.margin <= 2).length}</strong><p class="muted" style="font-size:9px">欠席余裕2回以下</p></div></div></section><section class="card span-8">${cardHead("欠席シミュレーター", "＋/−またはスライダーで簡単計算")}${renderSimulator()}</section><section class="card span-12">${cardHead("科目別セーフティ残量", "総授業数の25%までを欠席可能回数として計算")}<table class="attendance-table"><thead><tr><th>科目</th><th>出席扱い率</th><th>出席</th><th>欠席</th><th>公欠</th><th>残り授業</th><th>欠席余裕</th></tr></thead><tbody>${courses.map((course) => {
         const rate = Math.round(course.attendance * 100);
         const remaining = Math.max(0, Number(course.totalLessons || 0) - Number(course.attended || 0) - Number(course.absent || 0) - Number(course.publicAbsent || 0));
         const statusClass = course.margin < 0 ? "text-danger" : course.margin <= 2 ? "text-warn" : "text-good";
-        return `<tr data-course-open="${esc(course.classId)}"><td class="table-course">${esc(course.name)}</td><td class="rate-cell"><div class="progress-label"><span>${rate}%</span></div>${progressBar(rate, rate < 75 ? "danger" : rate < 82 ? "warn" : "good")}</td><td>${course.attended || 0}</td><td>${course.absent || 0}</td><td>${course.publicAbsent || 0}</td><td>${remaining}</td><td><strong class="${statusClass}">${course.margin === null ? "—" : course.margin < 0 ? `${Math.abs(course.margin)}回超過` : `${course.margin}回`}</strong></td></tr>`;
+        return `<tr data-course-open="${esc(course.classId)}"><td class="table-course">${esc(course.name)}${course.archived ? ` <span class="archive-pill">アーカイブ</span>` : ""}</td><td class="rate-cell"><div class="progress-label"><span>${rate}%</span></div>${progressBar(rate, rate < 75 ? "danger" : rate < 82 ? "warn" : "good")}</td><td>${course.attended || 0}</td><td>${course.absent || 0}</td><td>${course.publicAbsent || 0}</td><td>${remaining}</td><td><strong class="${statusClass}">${course.margin === null ? "—" : course.margin < 0 ? `${Math.abs(course.margin)}回超過` : `${course.margin}回`}</strong></td></tr>`;
       }).join("")}</tbody></table><p class="help-text">公欠は出席扱いです。休講は出欠数・授業消化数に含まれない前提で計算しています。</p></section></div>`;
   }
 
   function renderCourses() {
-    const courses = courseStats().sort((a, b) => a.name.localeCompare(b.name, "ja"));
-    return pageHeader("COURSES", "科目カルテ", "出席・課題・授業回と、説明可能なヘルス内訳を確認") +
-      `<div class="course-grid">${courses.map((course) => `<button class="course-card" style="--course-color:${colorForCourse(course.classId)};text-align:left" data-course-open="${esc(course.classId)}" type="button"><span class="kind-pill">${esc(course.term || "期間不明")}</span><h2>${esc(course.name)}</h2><p>${esc(course.period || "実施期間未取得")} · ${course.directories.length}回を収集</p><div class="course-card-metrics"><div><strong>${Math.round(course.attendance * 100)}%</strong><span>出席扱い率</span></div><div><strong>${course.pending}</strong><span>未整理</span></div><div><strong>${course.health}</strong><span>ヘルス /100</span></div></div>${healthBreakdown(course)}</button>`).join("")}</div>`;
+    const allCourses = courseStats();
+    const archivedCount = allCourses.filter((course) => course.archived).length;
+    const courses = allCourses.filter((course) => state.showArchivedCourses || !course.archived).sort((a, b) => a.name.localeCompare(b.name, "ja"));
+    return pageHeader("COURSES", "科目カルテ", "出席・課題・授業回と、説明可能なヘルス内訳を確認", archiveToggle("courses", archivedCount, state.showArchivedCourses)) +
+      `<div class="course-grid">${courses.map((course) => `<button class="course-card${course.archived ? " is-archived" : ""}" style="--course-color:${colorForCourse(course.classId)};text-align:left" data-course-open="${esc(course.classId)}" type="button"><span class="kind-pill">${course.archived ? "アーカイブ" : esc(course.term || "期間不明")}</span><h2>${esc(course.name)}</h2><p>${esc(course.period || "実施期間未取得")} · ${course.directories.length}回を収集</p><div class="course-card-metrics"><div><strong>${Math.round(course.attendance * 100)}%</strong><span>出席扱い率</span></div><div><strong>${course.pending}</strong><span>未整理</span></div><div><strong>${course.health}</strong><span>ヘルス /100</span></div></div>${healthBreakdown(course)}</button>`).join("") || `<div class="empty-inline">実施中の科目はありません。必要な場合はアーカイブを表示してください。</div>`}</div>`;
   }
 
   function renderCourseDialog(classId) {
@@ -581,6 +625,17 @@
       if (close) return $(`#${close.dataset.closeDialog}`).close();
       const step = event.target.closest("[data-sim-step]");
       if (step) return updateSimulator(state.simulatorAbsences + Number(step.dataset.simStep));
+      const archives = event.target.closest("[data-toggle-archives]");
+      if (archives) {
+        if (archives.dataset.toggleArchives === "attendance") {
+          state.showArchivedAttendance = !state.showArchivedAttendance;
+          state.simulatorCourseId = null;
+          state.simulatorAbsences = 0;
+        } else {
+          state.showArchivedCourses = !state.showArchivedCourses;
+        }
+        return render();
+      }
     });
     document.addEventListener("change", (event) => {
       if (event.target.id === "sim-course") {

@@ -363,12 +363,15 @@ kbd { background: var(--surface-strong); border: 1px solid var(--line); border-r
 .course-card { background: var(--surface); border: 1px solid var(--line); border-radius: 15px; cursor: pointer; overflow: hidden; padding: 15px; position: relative; transition: transform .16s ease, box-shadow .16s ease; }
 .course-card::before { background: var(--course-color, var(--brand)); content: ""; height: 4px; inset: 0 0 auto; position: absolute; }
 .course-card:hover { box-shadow: var(--shadow); transform: translateY(-2px); }
+.course-card.is-archived { opacity: .68; }
+.course-card.is-archived:hover { opacity: 1; }
 .course-card h2 { font-size: 13px; margin: 7px 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .course-card > p { color: var(--muted); font-size: 9px; margin: 0 0 16px; }
 .course-card-metrics { display: grid; gap: 8px; grid-template-columns: repeat(3, 1fr); }
 .course-card-metrics div { background: var(--surface-soft); border-radius: 8px; padding: 8px; }
 .course-card-metrics strong { display: block; font-size: 14px; }
 .course-card-metrics span { color: var(--muted); font-size: 8px; }
+.archive-pill { background: var(--surface-strong); border-radius: 999px; color: var(--muted); display: inline-block; font-size: 7px; font-weight: 900; margin-left: 4px; padding: 3px 6px; vertical-align: middle; }
 .health-breakdown { display: grid; gap: 7px; margin-top: 12px; }
 .health-line { align-items: center; display: grid; gap: 8px; grid-template-columns: 78px 1fr 36px; }
 .health-line span, .health-line strong { font-size: 8px; }
