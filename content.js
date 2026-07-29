@@ -690,7 +690,8 @@
     if (!snapshot.collectedAt) return "スタログ収集";
     const context = readClassContext();
     const course = courseMap(snapshot).get(String(context.classId));
-    if ((scene === "class" || scene === "directory") && course) {
+    if (scene === "directory" && course) return `${course.name} · ほかの回`;
+    if (scene === "class" && course) {
       const margin = absenceMargin(course);
       return `${course.name} · ${margin === null ? "出席確認" : `欠席余裕 ${margin}回`}`;
     }
@@ -744,7 +745,6 @@
     const course = courseMap(snapshot).get(String(context.classId));
     const allPending = portalPendingReports(snapshot, preferences);
     const coursePending = portalPendingReports(snapshot, preferences, { classId: context.classId });
-    const directoryPending = portalPendingReports(snapshot, preferences, { classId: context.classId, directoryId: context.directoryId });
     const otherCoursePending = coursePending.filter((report) => String(report.directoryId || "") !== String(context.directoryId || ""));
     const today = todayCourseBlocks(snapshot);
     const todayClassIds = new Set(today.map((slot) => String(slot.classId)));
@@ -754,7 +754,7 @@
     if (scene === "schedule") return `${nextCourseBlock(snapshot)}<h3>今日の授業</h3><div class="stalog-context-list">${today.map((slot) => `<div class="stalog-context-line"><strong>${escapeHtml(slot.period)}限 ${escapeHtml(slot.courseName || courseName(snapshot, slot.classId))}</strong><span>${escapeHtml(PERIOD_TIMES[Number(slot.period)]?.start || "")} · ${escapeHtml(slot.room || "教室未取得")}</span></div>`).join("") || `<p class="stalog-context-empty">今日の時間割はありません。</p>`}</div>`;
     if (scene === "mypage") return `${progressBlock(snapshot, preferences)}<h3>スタログ上の未完了</h3>${taskRows(allPending, snapshot, preferences, { limit: 5 })}`;
     if (scene === "class") return `${courseBlock(course, snapshot)}<h3>この科目の未整理</h3>${taskRows(coursePending, snapshot, preferences)}<button class="stalog-context-wide" type="button" data-action="dashboard" data-view="courses">科目カルテを開く</button>`;
-    if (scene === "directory") return `${courseBlock(course, snapshot)}<h3>この回の未整理</h3>${taskRows(directoryPending, snapshot, preferences)}<h3>同じ科目のほかの未整理</h3>${taskRows(otherCoursePending, snapshot, preferences)}<button class="stalog-context-wide" type="button" data-action="dashboard" data-view="courses">科目カルテを開く</button>`;
+    if (scene === "directory") return `<h3>同じ授業のほかの回</h3>${taskRows(otherCoursePending, snapshot, preferences)}<button class="stalog-context-wide" type="button" data-action="dashboard" data-view="courses">科目カルテを開く</button>`;
     return `${nextCourseBlock(snapshot)}${progressBlock(snapshot, preferences)}`;
   }
 
