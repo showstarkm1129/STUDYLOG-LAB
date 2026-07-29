@@ -41,8 +41,13 @@ let browser;
   }, snapshot);
   await page.goto(`http://127.0.0.1:${port}/dashboard.html?now=2026-07-29T09:30:00`, { waitUntil: "networkidle" });
   await page.waitForSelector(".metric");
-  assert.match(await page.locator("body").innerText(), /11\/11/);
+  assert.match(await page.locator("body").innerText(), /今日の3科目/);
   assert.equal(await page.locator(".nav-item").count(), 4);
+  const homeText = await page.locator("#app-view").innerText();
+  assert.doesNotMatch(homeText, /欠席余裕2回以下|出席アラート/);
+  const todayCourseIds = await page.locator("[data-today-courses] [data-course-open]").evaluateAll((items) => items.map((item) => item.dataset.courseOpen));
+  const todayCandidateIds = await page.locator("[data-today-candidates] [data-manual-toggle]").evaluateAll((items) => items.map((item) => item.dataset.manualToggle.split("::")[0]));
+  assert(todayCandidateIds.every((classId) => todayCourseIds.includes(classId)), "home candidates must belong to today's courses");
 
   if (screenshotDir) {
     fs.mkdirSync(screenshotDir, { recursive: true });
@@ -57,10 +62,14 @@ let browser;
 
   await page.click('[data-view="tasks"]');
   const pendingBefore = await page.locator(".task-row").count();
+  const manuallyCompletedKey = await page.locator("[data-manual-toggle]:not([disabled])").first().getAttribute("data-manual-toggle");
+  assert(todayCourseIds.includes(manuallyCompletedKey.split("::")[0]), "smoke fixture should check one of today's tasks");
   await page.locator("[data-manual-toggle]:not([disabled])").first().click();
   assert((await page.locator(".task-row").count()) < pendingBefore, "manual completion should remove a pending row");
   await page.click('[data-task-filter="manual"]');
   assert((await page.locator(".task-row").count()) >= 1, "manual completion should be reversible");
+  await page.click('[data-view="home"]');
+  assert.equal(await page.locator("[data-today-candidates] [data-manual-toggle]").evaluateAll((items, key) => items.filter((item) => item.dataset.manualToggle === key).length, manuallyCompletedKey), 0, "checked tasks must not appear in today's candidates");
 
   await page.click('[data-view="attendance"]');
   const rateBefore = await page.locator("#sim-rate").textContent();
@@ -86,6 +95,7 @@ let browser;
 
   await page.click("#topbar-data-button");
   assert(await page.locator("#data-dialog").evaluate((dialog) => dialog.open));
+  assert.match(await page.locator("#data-quality").innerText(), /科目情報/);
   await page.mouse.click(5, 5);
   assert.equal(await page.locator("#data-dialog").evaluate((dialog) => dialog.open), false, "data dialog should close from a backdrop click");
 

@@ -323,11 +323,11 @@
     return slots.slice(startIndex).find((slot) => String(slot.classId) !== String(classId));
   }
 
-  function nextDifferentCourse(now = dashboardNow()) {
+  function nextDifferentCourse(now = dashboardNow(), { todayOnly = false } = {}) {
     const slots = orderedTimetableSlots();
     const today = isoDay(now);
     const todaysSlots = slots.filter((slot) => slot.date === today);
-    const laterDateSlot = slots.find((slot) => slot.date > today);
+    const laterDateSlot = todayOnly ? null : slots.find((slot) => slot.date > today);
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
     const activeIndex = todaysSlots.findIndex((slot) => {
       const period = PERIOD_TIMES[Number(slot.period)];
@@ -365,10 +365,10 @@
     return nextCourse.slot.date === isoDay(tomorrow) ? "明日" : formatDate(nextCourse.slot.date);
   }
 
-  function renderNextCourseCard() {
-    const nextCourse = nextDifferentCourse();
+  function renderNextCourseCard({ todayOnly = false } = {}) {
+    const nextCourse = nextDifferentCourse(dashboardNow(), { todayOnly });
     if (!nextCourse) {
-      return `<section class="card hero-card next-course-card span-5" data-next-course-card><div>${cardHead("次の科目", "収集済みの時間割から判定")}<h3>次の科目を判定できません</h3><p class="muted">次の授業日を含む時間割を収集してください。</p></div><div class="next-course-clock">--<span>限</span></div></section>`;
+      return `<section class="card hero-card next-course-card span-5" data-next-course-card><div>${cardHead("次の科目", todayOnly ? "今日の時間割だけから判定" : "収集済みの時間割から判定")}<h3>${todayOnly ? "今日の授業は終了しました" : "次の科目を判定できません"}</h3><p class="muted">${todayOnly ? "次の授業日は表示しません。" : "次の授業日を含む時間割を収集してください。"}</p></div><div class="next-course-clock">--<span>限</span></div></section>`;
     }
     const slot = nextCourse.slot;
     const time = PERIOD_TIMES[Number(slot.period)];
@@ -404,32 +404,28 @@
   }
 
   function renderHome() {
-    const reports = array(state.snapshot.reports);
-    const tasks = pendingTasks();
+    const today = todayCourseBlocks();
+    const todayClassIds = new Set(today.map((slot) => String(slot.classId)));
+    const reports = array(state.snapshot.reports).filter((report) => todayClassIds.has(String(report.classId)));
+    const tasks = pendingTasks().filter((report) => todayClassIds.has(String(report.classId)));
     const portalDone = reports.filter(isPortalDone).length;
     const manualDone = reports.filter((report) => isPortalPending(report) && isManualComplete(report)).length;
     const effectiveDone = reports.filter(isEffectivelyDone).length;
     const completion = reports.length ? Math.round(effectiveDone / reports.length * 100) : 0;
-    const allCourses = courseStats();
-    const courses = allCourses.filter((course) => !course.archived);
-    const atRisk = courses.filter((course) => course.margin !== null && course.margin <= 2).sort((a, b) => a.margin - b.margin);
-    const today = todayCourseBlocks();
+    const courses = courseStats().filter((course) => todayClassIds.has(String(course.classId)));
     const now = dashboardNow();
     const actions = `<button class="primary-button" data-view-target="tasks" type="button">課題を確認</button>`;
-    return pageHeader("OVERVIEW", new Intl.DateTimeFormat("ja-JP", { month: "long", day: "numeric", weekday: "long" }).format(now), `${formatDateTime(state.snapshot.collectedAt)}に更新 · 公欠は出席扱い`, actions) +
+    return pageHeader("TODAY", new Intl.DateTimeFormat("ja-JP", { month: "long", day: "numeric", weekday: "long" }).format(now), `${formatDateTime(state.snapshot.collectedAt)}に更新 · 今日の${today.length}科目だけを表示`, actions) +
       `<div class="bento-grid">
-        <section class="card span-7">${cardHead("いまの全体像", "手動完了を反映した主要指標")}<div class="metric-row"><div class="metric"><strong>${tasks.length}</strong><span>スタログ上の未完了</span><small>手動完了を除外</small></div><div class="metric"><strong>${completion}<small>%</small></strong><span>整理済み</span><small>${effectiveDone} / ${reports.length}件</small></div><div class="metric"><strong>${manualDone}</strong><span>手動で完了</span><small>端末内の補正</small></div><div class="metric"><strong>${atRisk.length}</strong><span>欠席余裕2回以下</span><small>75%基準</small></div></div></section>
-        ${renderNextCourseCard()}
+        <section class="card span-7">${cardHead("今日の科目の全体像", "今日の時間割にある科目だけを集計")}<div class="metric-row three"><div class="metric"><strong>${tasks.length}</strong><span>未完了</span><small>チェック済みを除外</small></div><div class="metric"><strong>${completion}<small>%</small></strong><span>整理済み</span><small>${effectiveDone} / ${reports.length}件</small></div><div class="metric"><strong>${manualDone}</strong><span>手動で完了</span><small>端末内の補正</small></div></div></section>
+        ${renderNextCourseCard({ todayOnly: true })}
 
         <section class="card span-4">${cardHead("課題の整理率", "課題実施による完了と手動完了を合算")}<div style="display:flex;align-items:center;gap:18px"><div class="ring" style="--value:${completion}"><div class="ring-label"><strong>${completion}%</strong><span>整理済み</span></div></div><div style="flex:1"><div class="progress-label"><span>課題を実施して完了</span><strong>${portalDone}</strong></div>${progressBar(reports.length ? portalDone / reports.length * 100 : 0, "good")}<div class="progress-label" style="margin-top:11px"><span>手動で完了</span><strong>${manualDone}</strong></div>${progressBar(reports.length ? manualDone / reports.length * 100 : 0, "warn")}<div class="progress-label" style="margin-top:11px"><span>残り</span><strong>${tasks.length}</strong></div></div></div></section>
 
-        <section class="card span-4">${cardHead("今日の授業", today.length ? `${today.length}科目` : "時間割から確認")}<div class="compact-list">${today.map((slot) => `<div class="list-row"><span class="row-icon">${esc(slot.period)}</span><div class="row-main"><strong>${esc(slot.courseName || courseName(slot.classId))}</strong><span>${esc(PERIOD_TIMES[Number(slot.period)]?.start || "時刻不明")} · ${esc(slot.room ? `${slot.room}教室` : "教室未取得")}</span></div><div class="row-meta"><strong>${esc(slot.period)}限</strong></div></div>`).join("") || `<div class="empty-inline">今日の時間割は収集されていません。</div>`}</div></section>
+        <section class="card span-8">${cardHead("今日の授業", today.length ? `${today.length}科目` : "時間割から確認")}<div class="compact-list">${today.map((slot) => `<div class="list-row"><span class="row-icon">${esc(slot.period)}</span><div class="row-main"><strong>${esc(slot.courseName || courseName(slot.classId))}</strong><span>${esc(PERIOD_TIMES[Number(slot.period)]?.start || "時刻不明")} · ${esc(slot.room ? `${slot.room}教室` : "教室未取得")}</span></div><div class="row-meta"><strong>${esc(slot.period)}限</strong></div></div>`).join("") || `<div class="empty-inline">今日の時間割は収集されていません。</div>`}</div></section>
 
-        <section class="card span-4">${cardHead("出席アラート", "全科目共通75%・公欠は出席扱い")}<div class="compact-list">${atRisk.slice(0, 4).map((course) => `<div class="list-row"><span class="row-icon">!</span><div class="row-main"><strong>${esc(course.name)}</strong><span>出席扱い ${Math.round(course.attendance * 100)}% · 欠席${course.absent || 0}回</span></div><div class="row-meta"><strong class="${course.margin < 0 ? "text-danger" : "text-warn"}">${course.margin < 0 ? `${Math.abs(course.margin)}回超過` : `残${course.margin}回`}</strong></div></div>`).join("") || `<div class="empty-inline">欠席余裕2回以下の科目はありません。</div>`}</div></section>
-
-        <section class="card span-7">${cardHead("次に確認する候補", "判断理由を表示・手動完了で除外可能")}${renderTaskRows(tasks, { limit: 3 })}</section>
-        <section class="card span-5">${cardHead("科目ヘルス", "出席基準50点＋課題整理50点")}<div class="compact-list">${[...courses].sort((a, b) => a.health - b.health).slice(0, 5).map((course) => `<button class="list-row" style="border:0;width:100%;text-align:left;cursor:pointer" data-course-open="${esc(course.classId)}" type="button"><span class="row-icon" style="color:${colorForCourse(course.classId)}">●</span><div class="row-main"><strong>${esc(course.name)}</strong><span>出席 ${course.attendancePoints}/50 · 課題 ${course.taskPoints}/50</span></div><div class="row-meta"><strong>${course.health}</strong><span>/ 100</span></div></button>`).join("") || `<div class="empty-inline">実施中の科目はありません。</div>`}</div></section>
-        <section class="card span-12">${cardHead("データ品質", "不足データが影響する機能まで表示")}${renderQuality()}</section>
+        <section class="card span-7" data-today-candidates>${cardHead("次に確認する候補", "今日の科目にある未完了だけを表示")}${renderTaskRows(tasks, { limit: 3 })}</section>
+        <section class="card span-5" data-today-courses>${cardHead("今日の科目ヘルス", "今日の科目だけを表示")}<div class="compact-list">${[...courses].sort((a, b) => a.health - b.health).map((course) => `<button class="list-row" style="border:0;width:100%;text-align:left;cursor:pointer" data-course-open="${esc(course.classId)}" type="button"><span class="row-icon" style="color:${colorForCourse(course.classId)}">●</span><div class="row-main"><strong>${esc(course.name)}</strong><span>出席 ${course.attendancePoints}/50 · 課題 ${course.taskPoints}/50</span></div><div class="row-meta"><strong>${course.health}</strong><span>/ 100</span></div></button>`).join("") || `<div class="empty-inline">今日の科目はありません。</div>`}</div></section>
       </div>`;
   }
 
@@ -536,8 +532,14 @@
 
   function updateDataSummary() {
     const summary = $("#data-summary");
-    if (!snapshotReady()) { summary.textContent = "まだデータを読み込んでいません。"; return; }
+    const quality = $("#data-quality");
+    if (!snapshotReady()) {
+      summary.textContent = "まだデータを読み込んでいません。";
+      quality.innerHTML = `<div class="empty-inline">データ読み込み後に確認できます。</div>`;
+      return;
+    }
     summary.innerHTML = `<strong>最終取得: ${esc(formatDateTime(state.snapshot.collectedAt))}</strong><br>${array(state.snapshot.courses).length}科目 · ${array(state.snapshot.reports).length}課題/テスト · ${array(state.snapshot.directories).length}授業回 · 手動完了${state.prefs.manualCompleted.length}件<br>スキーマ v${esc(state.snapshot.schemaVersion || "?")} · 履修年度 ${esc(state.snapshot.academicYear || "不明")}`;
+    quality.innerHTML = renderQuality();
   }
 
   function download(filename, type, content) {

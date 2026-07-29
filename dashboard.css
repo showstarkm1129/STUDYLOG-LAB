@@ -219,6 +219,7 @@ kbd { background: var(--surface-strong); border: 1px solid var(--line); border-r
 .candidate-button.is-selected { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 
 .metric-row { display: grid; gap: 10px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.metric-row.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .metric { border-left: 2px solid var(--line); padding-left: 11px; }
 .metric:first-child { border-color: var(--brand); }
 .metric strong { display: block; font-size: clamp(21px, 2.4vw, 31px); letter-spacing: -.04em; line-height: 1; }
@@ -432,6 +433,9 @@ kbd { background: var(--surface-strong); border: 1px solid var(--line); border-r
 .modal-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 .data-summary { background: var(--surface-soft); border-radius: 12px; color: var(--muted); font-size: 11px; line-height: 1.7; padding: 13px; }
 .data-summary strong { color: var(--ink); }
+.data-quality-dialog { margin-top: 16px; }
+.data-quality-dialog h3 { font-size: 13px; margin: 0; }
+.data-quality-dialog > p { color: var(--muted); font-size: 9px; margin: 4px 0 9px; }
 .help-text { color: var(--muted); font-size: 9px; line-height: 1.6; }
 .help-text code { background: var(--surface-strong); border-radius: 4px; padding: 2px 4px; }
 

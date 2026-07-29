@@ -48,8 +48,18 @@ const server = http.createServer((request, response) => {
   };
 
   await visit("/lms/", "今日のブリーフ");
+  const topText = await page.locator("#stalog-context-body").innerText();
+  assert.doesNotMatch(topText, /欠席余裕/);
+  const topCandidateIds = await page.locator("#stalog-context-body [data-context-manual]").evaluateAll((buttons) => buttons.map((button) => button.dataset.contextManual.split("::")[0]));
+  assert(topCandidateIds.length > 0, "today brief should contain today's unfinished items");
+  assert(topCandidateIds.every((classId) => ["10067", "10019", "10174"].includes(classId)), "today brief candidates must belong to today's courses");
+  assert.equal(await page.locator('#stalog-context-body [data-checked="true"]').count(), 0);
+  await page.locator("#stalog-bridge-toggle").click();
+  const completedFromBrief = await page.locator("#stalog-context-body [data-context-manual]").first().getAttribute("data-context-manual");
+  await page.locator("#stalog-context-body [data-context-manual]").first().click();
+  await page.waitForFunction(() => document.body.dataset.manualCompleted === "1");
+  assert.equal(await page.locator("#stalog-context-body [data-context-manual]").evaluateAll((buttons, key) => buttons.filter((button) => button.dataset.contextManual === key).length, completedFromBrief), 0, "checked items must disappear from today's candidates");
   if (screenshotPath) {
-    await page.locator("#stalog-bridge-toggle").click();
     await page.screenshot({ path: screenshotPath, fullPage: true });
   }
   await visit("/lms/schedule/", "時間割");
