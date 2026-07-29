@@ -309,9 +309,12 @@ kbd { background: var(--surface-strong); border: 1px solid var(--line); border-r
 
 .task-row { grid-template-columns: auto auto minmax(0, 1fr) auto auto; }
 .task-row.is-snoozed { opacity: .55; }
-.task-check { align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 50%; color: var(--good); cursor: pointer; display: inline-flex; height: 24px; justify-content: center; width: 24px; }
+.task-check { align-items: center; background: var(--surface); border: 2px solid var(--good); border-radius: 8px; color: transparent; cursor: pointer; display: inline-flex; flex: 0 0 32px; font-size: 18px; font-weight: 900; height: 32px; justify-content: center; width: 32px; }
+.task-check:hover { background: var(--good-soft); color: transparent; }
 .task-check.is-pinned { background: var(--good-soft); border-color: var(--good); }
-.task-check.is-manual { background: var(--good); border-color: var(--good); color: #fff; }
+.task-check.is-manual, .task-check.is-manual:hover { background: var(--good); border-color: var(--good); color: #fff; }
+.task-check.is-portal-done { background: var(--good-soft); border-color: var(--good); color: var(--good); cursor: default; opacity: .72; }
+.task-row.is-manual { background: #f4f8f5; }
 .manual-pill { background: var(--purple-soft); border-radius: 999px; color: var(--purple); display: inline-block; font-size: 8px; font-weight: 900; padding: 4px 7px; white-space: nowrap; }
 .task-reason { color: var(--warn); font-size: 8px; font-weight: 800; }
 .tiny-action { background: transparent; border: 0; color: var(--muted); cursor: pointer; font-size: 14px; padding: 3px; }

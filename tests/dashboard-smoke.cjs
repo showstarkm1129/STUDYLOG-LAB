@@ -71,7 +71,20 @@ let browser;
   await page.click('[data-view="courses"]');
   await page.click("[data-course-open]");
   assert(await page.locator("#course-dialog").evaluate((dialog) => dialog.open));
-  await page.click('[data-close-dialog="course-dialog"]');
+  const dialogChecks = page.locator('#course-dialog [data-manual-toggle]:not([disabled])');
+  const dialogManualBefore = await page.locator("#course-dialog .task-check.is-manual").count();
+  await dialogChecks.first().click();
+  await page.waitForFunction((count) => document.querySelectorAll("#course-dialog .task-check.is-manual").length > count, dialogManualBefore);
+  if (screenshotDir) await page.screenshot({ path: path.join(screenshotDir, "stalog-course-dialog.png"), fullPage: true });
+  await page.locator("#course-dialog .task-check.is-manual").first().click();
+  await page.waitForFunction((count) => document.querySelectorAll("#course-dialog .task-check.is-manual").length === count, dialogManualBefore);
+  await page.mouse.click(5, 5);
+  assert.equal(await page.locator("#course-dialog").evaluate((dialog) => dialog.open), false, "course dialog should close from a backdrop click");
+
+  await page.click("#topbar-data-button");
+  assert(await page.locator("#data-dialog").evaluate((dialog) => dialog.open));
+  await page.mouse.click(5, 5);
+  assert.equal(await page.locator("#data-dialog").evaluate((dialog) => dialog.open), false, "data dialog should close from a backdrop click");
 
   assert.deepEqual(errors, [], `browser errors:\n${errors.join("\n")}`);
   await browser.close();

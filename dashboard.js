@@ -272,8 +272,8 @@
       const link = reportLink(report);
       const contextLabel = report.context.date ? `${report.context.label} ${formatDate(report.context.date)}` : "日付なし";
       const reason = report.priority.reasons[0] ? `<span class="task-reason"> · ${esc(report.priority.reasons[0])}</span>` : "";
-      return `<div class="task-row">
-        <button class="task-check${manual ? " is-manual" : ""}" data-manual-toggle="${esc(report.key)}" type="button" title="${manual ? "手動完了を解除" : "完了扱いにする"}"${portalDone && !manual ? " disabled" : ""}>${manual || portalDone ? "✓" : ""}</button>
+      return `<div class="task-row${manual ? " is-manual" : ""}">
+        <button class="task-check${manual ? " is-manual" : portalDone ? " is-portal-done" : ""}" data-manual-toggle="${esc(report.key)}" type="button" aria-pressed="${manual}" aria-label="${manual ? "チェックを外して未整理へ戻す" : portalDone ? "スタログ上で完了済み" : "チェックして完了扱いにする"}" title="${manual ? "チェックを外して未整理へ戻す" : portalDone ? "スタログ上で完了済み" : "チェックして完了扱いにする"}"${portalDone && !manual ? " disabled" : ""}>✓</button>
         ${showPriority && !manual && !portalDone ? priorityPill(report.priority) : `<span class="kind-pill">${esc(report.kind || "項目")}</span>`}
         <div class="row-main"><strong>${esc(report.title || "名称なし")}</strong><span>${esc(courseName(report.classId))} · ${esc(report.kind || "項目")} · ${esc(contextLabel)}${reason}</span></div>
         ${reportStatus(report)}
@@ -611,6 +611,8 @@
       download(`stalog-dashboard-${isoDay(new Date())}.json`, "application/json", JSON.stringify(payload, null, 2));
     });
     document.addEventListener("click", (event) => {
+      const backdrop = event.target.closest?.("dialog.modal");
+      if (backdrop && event.target === backdrop) return backdrop.close();
       const dataOpen = event.target.closest("[data-open-data]");
       if (dataOpen) return openDataDialog();
       const view = event.target.closest("[data-view-target]");

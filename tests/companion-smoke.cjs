@@ -57,6 +57,10 @@ const server = http.createServer((request, response) => {
   assert.match(await page.locator("#stalog-context-body").innerText(), /スタログ上の未完了/);
   const compactBefore = await page.locator("#stalog-bridge-toggle").innerText();
   await page.locator("#stalog-bridge-toggle").click();
+  await page.mouse.click(5, 5);
+  assert.notEqual(await page.locator("#stalog-bridge-panel").getAttribute("data-open"), "true", "companion should close from an outside click");
+  await page.locator("#stalog-bridge-toggle").click();
+  await page.waitForFunction(() => document.querySelector("#stalog-bridge-panel")?.dataset.open === "true");
   await page.locator("[data-context-manual]").first().click();
   await page.waitForFunction(() => document.body.dataset.manualCompleted === "1");
   assert.notEqual(await page.locator("#stalog-bridge-toggle").innerText(), compactBefore);

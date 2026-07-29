@@ -898,6 +898,12 @@
     if (message?.type === "stalog-bridge:toggle" && !isQuizScreen()) document.querySelector("#stalog-bridge-toggle")?.click();
   });
 
+  document.addEventListener("click", (event) => {
+    const root = document.getElementById(ROOT_ID);
+    const panel = root?.querySelector("#stalog-bridge-panel");
+    if (panel?.dataset.open === "true" && !event.composedPath().includes(root)) panel.dataset.open = "false";
+  });
+
   const initialize = () => {
     syncPageMode(true);
     observeCurrentPage();
