@@ -17,4 +17,13 @@
     notifyIfScheduleRequest(input);
     return originalFetch.call(this, input, init);
   };
+
+  for (const method of ["pushState", "replaceState"]) {
+    const original = history[method];
+    history[method] = function () {
+      const result = original.apply(this, arguments);
+      window.dispatchEvent(new CustomEvent("stalog-bridge:location-change"));
+      return result;
+    };
+  }
 })();

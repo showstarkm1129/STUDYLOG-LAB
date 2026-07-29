@@ -24,11 +24,12 @@ const server = http.createServer((request, response) => {
   response.writeHead(200, { "Content-Type": mime[path.extname(filename)] || "application/octet-stream" });
   fs.createReadStream(filename).pipe(response);
 });
+let browser;
 
 (async () => {
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const port = server.address().port;
-  const browser = cdpEndpoint
+  browser = cdpEndpoint
     ? await chromium.connectOverCDP(cdpEndpoint)
     : await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
@@ -38,9 +39,9 @@ const server = http.createServer((request, response) => {
   await page.addInitScript((data) => {
     localStorage.setItem("stalogBridgeSnapshotV1", JSON.stringify(data));
   }, snapshot);
-  await page.goto(`http://127.0.0.1:${port}/dashboard.html`, { waitUntil: "networkidle" });
+  await page.goto(`http://127.0.0.1:${port}/dashboard.html?now=2026-07-29T09:30:00`, { waitUntil: "networkidle" });
   await page.waitForSelector(".metric");
-  assert.match(await page.locator("body").innerText(), /11科目/);
+  assert.match(await page.locator("body").innerText(), /11\/11/);
   assert.equal(await page.locator(".nav-item").count(), 4);
 
   if (screenshotDir) {
@@ -78,6 +79,7 @@ const server = http.createServer((request, response) => {
   console.log("dashboard smoke test: ok");
 })().catch((error) => {
   server.close();
+  browser?.close();
   console.error(error);
   process.exitCode = 1;
 });

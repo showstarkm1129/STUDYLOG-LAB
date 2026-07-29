@@ -2,10 +2,25 @@
   "use strict";
 
   const STORAGE_KEY = "stalogBridgeSnapshotV1";
+  const PREFS_KEY = "stalogDashboardPreferencesV1";
   const ROOT_ID = "stalog-bridge-root";
   const CLASS_PATH = /\/lms\/class\/(?:grade\/)?(?<classId>\d+)(?:\/(?<directoryId>\d+))?/;
+  const ATTENDANCE_THRESHOLD = 0.75;
+  const PERIOD_TIMES = Object.freeze({
+    1: { start: "09:00", end: "09:50" },
+    2: { start: "10:00", end: "10:50" },
+    3: { start: "11:00", end: "11:50" },
+    4: { start: "12:40", end: "13:30" },
+    5: { start: "13:40", end: "14:30" },
+    6: { start: "14:40", end: "15:30" }
+  });
 
   const text = (element) => (element?.textContent || "").replace(/\s+/g, " ").trim();
+  const array = (value) => Array.isArray(value) ? value : [];
+  const escapeHtml = (value) => String(value ?? "").replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[character]));
+  const normalize = (value) => String(value || "").normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
+  const pad = (value) => String(value).padStart(2, "0");
+  const isoDay = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
   const uniqueBy = (items, key) => [...new Map(items.map((item) => [key(item), item])).values()];
   const mergeBy = (existing, incoming, key) => {
     const merged = new Map(existing.map((item) => [key(item), item]));
@@ -29,6 +44,19 @@
     if (path === "/lms/" || path === "/lms") return "top";
     if (path.includes("/lms/schedule/")) return "schedule";
     return "other";
+  }
+
+  function isQuizScreen() {
+    return /\/quiz(?:\/|\.php(?:\/|$)|$)/i.test(location.pathname)
+      || /quiz/i.test(location.search)
+      || Boolean(document.querySelector('form[action*="/quiz/"][method="post"], #div-quiz-question, [data-page-type="quiz"]'));
+  }
+
+  function pageScene() {
+    if (isQuizScreen()) return "quiz";
+    const kind = pageKind();
+    if (kind === "class") return readClassContext().directoryId ? "directory" : "class";
+    return kind;
   }
 
   function readScheduleStartDate(url) {
@@ -509,65 +537,276 @@
     URL.revokeObjectURL(url);
   }
 
-  function describe(snapshot) {
-    if (!snapshot?.collectedAt) return "まだ収集していません。\n「取得して保存」を押すと、履修状況と課題／テスト状況を読み取り専用で取得します。";
-    return [
-      `最終取得: ${new Date(snapshot.collectedAt).toLocaleString("ja-JP")}`,
-      `科目: ${snapshot.courses?.length || 0}件`,
-      `課題・テスト: ${snapshot.reports?.length || 0}件`,
-      `表示中に記録した回: ${snapshot.directories?.length || 0}件`,
-      `日付を取得した回: ${snapshot.directories?.filter((item) => item.lessonDate).length || 0}件`,
-      `全${snapshot.collectedClassCount || 0}科目・講座の回一覧を確認: ${snapshot.lessonListCollectedAt ? "済み" : "未実行"}`,
-      `科目ページ項目: ${snapshot.directoryItems?.length || 0}件`,
-      `正規化した時間割: ${snapshot.timetableSlots?.length || 0}件`,
-      "認証情報・Cookieは保存も出力もしません。"
-    ].join("\n");
+  async function readPreferences() {
+    const result = await chrome.storage.local.get(PREFS_KEY);
+    return { manualCompleted: [], ...(result[PREFS_KEY] || {}) };
+  }
+
+  async function savePreferences(preferences) {
+    await chrome.storage.local.set({ [PREFS_KEY]: preferences });
+  }
+
+  function reportKey(report) {
+    return [report.classId, report.directoryId, report.kind, normalize(report.title), report.href]
+      .map((value) => String(value || ""))
+      .join("::");
+  }
+
+  function isPortalPending(report) {
+    return /未完了|未提出|未回答|未受験|未実施/.test(report?.status || "");
+  }
+
+  function isPortalDone(report) {
+    return !isPortalPending(report) && /完了|提出済|回答済|受験済/.test(report?.status || "");
+  }
+
+  function isManualComplete(report, preferences) {
+    return new Set(preferences.manualCompleted).has(reportKey(report));
+  }
+
+  function attendanceRate(course) {
+    const attended = Number(course?.attended || 0);
+    const absent = Number(course?.absent || 0);
+    const publicAbsent = Number(course?.publicAbsent || 0);
+    const observed = attended + absent + publicAbsent;
+    return observed ? (attended + publicAbsent) / observed : 0;
+  }
+
+  function absenceMargin(course) {
+    const total = Number(course?.totalLessons || 0);
+    return total ? Math.floor(total * (1 - ATTENDANCE_THRESHOLD) + 1e-8) - Number(course.absent || 0) : null;
+  }
+
+  function courseEndDate(course, snapshot) {
+    const matches = [...String(course?.period || "").normalize("NFKC").matchAll(/(?:(20\d{2})\s*[\/年.\-]\s*)?(\d{1,2})\s*[\/月.\-]\s*(\d{1,2})/g)];
+    const last = matches.at(-1);
+    if (last) {
+      const month = Number(last[2]);
+      const day = Number(last[3]);
+      const academicYear = Number(snapshot.academicYear || new Date().getFullYear());
+      const year = Number(last[1] || academicYear + (month <= 3 ? 1 : 0));
+      const date = new Date(year, month - 1, day);
+      if (date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day) return date;
+    }
+    return array(snapshot.directories)
+      .filter((item) => String(item.classId) === String(course?.classId))
+      .map((item) => item.lessonDate ? new Date(`${item.lessonDate}T00:00:00`) : null)
+      .filter((date) => date && !Number.isNaN(date.valueOf()))
+      .sort((a, b) => a - b)
+      .at(-1) || null;
+  }
+
+  function isArchived(course, snapshot) {
+    const end = courseEndDate(course, snapshot);
+    if (!end) return false;
+    end.setDate(end.getDate() + 1);
+    end.setHours(0, 0, 0, 0);
+    return new Date() >= end;
+  }
+
+  function clockMinutes(value) {
+    const [hour, minute] = String(value || "").split(":").map(Number);
+    return hour * 60 + minute;
+  }
+
+  function orderedSlots(snapshot) {
+    return array(snapshot.timetableSlots)
+      .filter((slot) => slot.date && PERIOD_TIMES[Number(slot.period)])
+      .sort((a, b) => String(a.date).localeCompare(String(b.date)) || Number(a.period) - Number(b.period));
+  }
+
+  function nextDifferentCourse(snapshot, now = new Date()) {
+    const slots = orderedSlots(snapshot);
+    const today = isoDay(now);
+    const todaysSlots = slots.filter((slot) => slot.date === today);
+    const nextDate = slots.find((slot) => slot.date > today);
+    const minutes = now.getHours() * 60 + now.getMinutes();
+    const activeIndex = todaysSlots.findIndex((slot) => {
+      const period = PERIOD_TIMES[Number(slot.period)];
+      return clockMinutes(period.start) <= minutes && minutes < clockMinutes(period.end);
+    });
+    if (activeIndex >= 0) {
+      const active = todaysSlots[activeIndex];
+      return todaysSlots.slice(activeIndex + 1).find((slot) => String(slot.classId) !== String(active.classId)) || nextDate || null;
+    }
+    const futureIndex = todaysSlots.findIndex((slot) => clockMinutes(PERIOD_TIMES[Number(slot.period)].start) > minutes);
+    if (futureIndex >= 0) {
+      const future = todaysSlots[futureIndex];
+      const previous = todaysSlots[futureIndex - 1];
+      if (previous && Number(future.period) === Number(previous.period) + 1 && String(future.classId) === String(previous.classId)) {
+        return todaysSlots.slice(futureIndex + 1).find((slot) => String(slot.classId) !== String(future.classId)) || nextDate || null;
+      }
+      return future;
+    }
+    return nextDate || null;
+  }
+
+  function todayCourseBlocks(snapshot) {
+    const slots = orderedSlots(snapshot).filter((slot) => slot.date === isoDay(new Date()));
+    return slots.filter((slot, index) => index === 0 || String(slot.classId) !== String(slots[index - 1].classId));
+  }
+
+  function courseMap(snapshot) {
+    return new Map(array(snapshot.courses).map((course) => [String(course.classId), course]));
+  }
+
+  function courseName(snapshot, classId) {
+    return courseMap(snapshot).get(String(classId))?.name || `科目 ${classId || "不明"}`;
+  }
+
+  function pendingReports(snapshot, preferences, filters = {}) {
+    return array(snapshot.reports).filter((report) => {
+      if (!isPortalPending(report) || isManualComplete(report, preferences)) return false;
+      if (filters.classId && String(report.classId) !== String(filters.classId)) return false;
+      if (filters.directoryId && String(report.directoryId) !== String(filters.directoryId)) return false;
+      return true;
+    });
+  }
+
+  function compactLabel(scene, snapshot, preferences) {
+    if (!snapshot.collectedAt) return "スタログ収集";
+    const context = readClassContext();
+    const course = courseMap(snapshot).get(String(context.classId));
+    if ((scene === "class" || scene === "directory") && course) {
+      const margin = absenceMargin(course);
+      return `${course.name} · ${margin === null ? "出席確認" : `欠席余裕 ${margin}回`}`;
+    }
+    if (scene === "mypage") return `未整理 ${pendingReports(snapshot, preferences).length}件`;
+    const next = nextDifferentCourse(snapshot);
+    if (next) return `次: ${next.courseName || courseName(snapshot, next.classId)} ${PERIOD_TIMES[Number(next.period)].start}`;
+    return "Stalog Dashboard";
+  }
+
+  function taskRows(reports, snapshot, preferences, limit = 3) {
+    if (!reports.length) return `<p class="stalog-context-empty">該当する未整理項目はありません。</p>`;
+    return `<div class="stalog-context-list">${reports.slice(0, limit).map((report) => {
+      const href = String(report.href || "").startsWith("/") ? report.href : "";
+      return `<div class="stalog-context-task"><button type="button" data-context-manual="${escapeHtml(reportKey(report))}" title="完了扱いにする">✓</button><div><strong>${escapeHtml(report.title || "名称なし")}</strong><span>${escapeHtml(courseName(snapshot, report.classId))} · ${escapeHtml(report.status || "状態なし")}</span></div>${href ? `<a href="${escapeHtml(href)}">開く</a>` : ""}</div>`;
+    }).join("")}</div>`;
+  }
+
+  function nextCourseBlock(snapshot) {
+    const next = nextDifferentCourse(snapshot);
+    if (!next) return `<div class="stalog-context-feature"><span>次の科目</span><strong>判定できません</strong><small>次の授業日を含む時間割を収集してください</small></div>`;
+    const time = PERIOD_TIMES[Number(next.period)];
+    return `<div class="stalog-context-feature stalog-context-next"><span>次の科目</span><strong>${escapeHtml(next.courseName || courseName(snapshot, next.classId))}</strong><small>${escapeHtml(next.period)}限 ${escapeHtml(time.start)} · ${escapeHtml(next.room ? `${next.room}教室` : "教室未取得")}</small></div>`;
+  }
+
+  function progressBlock(snapshot, preferences) {
+    const reports = array(snapshot.reports);
+    const done = reports.filter((report) => isPortalDone(report) || isManualComplete(report, preferences)).length;
+    const rate = reports.length ? Math.round(done / reports.length * 100) : 0;
+    return `<div class="stalog-context-feature"><span>課題の整理率</span><strong>${rate}%</strong><small>${done}/${reports.length}件 · 未整理${pendingReports(snapshot, preferences).length}件</small></div>`;
+  }
+
+  function courseBlock(course, snapshot) {
+    if (!course) return `<p class="stalog-context-empty">この科目の収集データがありません。</p>`;
+    const margin = absenceMargin(course);
+    const rate = Math.round(attendanceRate(course) * 100);
+    const archived = isArchived(course, snapshot);
+    return `<div class="stalog-context-metrics"><div><span>出席扱い率</span><strong>${rate}%</strong></div><div><span>欠席余裕</span><strong>${margin ?? "—"}回</strong></div><div><span>状態</span><strong>${archived ? "終了" : "実施中"}</strong></div></div>`;
+  }
+
+  function sceneContent(scene, snapshot, preferences) {
+    const context = readClassContext();
+    const course = courseMap(snapshot).get(String(context.classId));
+    const allPending = pendingReports(snapshot, preferences);
+    const coursePending = pendingReports(snapshot, preferences, { classId: context.classId });
+    const directoryPending = pendingReports(snapshot, preferences, { classId: context.classId, directoryId: context.directoryId });
+    const alerts = array(snapshot.courses).filter((item) => !isArchived(item, snapshot) && absenceMargin(item) !== null && absenceMargin(item) <= 2);
+    const today = todayCourseBlocks(snapshot);
+    if (!snapshot.collectedAt) return `<p class="stalog-context-empty">まだ収集していません。「取得して保存」を押してください。</p>`;
+    if (scene === "top") return `${nextCourseBlock(snapshot)}${progressBlock(snapshot, preferences)}<h3>今日の授業</h3><div class="stalog-context-list">${today.slice(0, 4).map((slot) => `<div class="stalog-context-line"><strong>${escapeHtml(slot.period)}限 ${escapeHtml(slot.courseName || courseName(snapshot, slot.classId))}</strong><span>${escapeHtml(slot.room || "教室未取得")}</span></div>`).join("") || `<p class="stalog-context-empty">今日の時間割はありません。</p>`}</div><h3>次に確認する候補</h3>${taskRows(allPending, snapshot, preferences)}${alerts.length ? `<p class="stalog-context-warning">欠席余裕2回以下: ${alerts.length}科目</p>` : ""}`;
+    if (scene === "schedule") return `${nextCourseBlock(snapshot)}<h3>今日の授業</h3><div class="stalog-context-list">${today.map((slot) => `<div class="stalog-context-line"><strong>${escapeHtml(slot.period)}限 ${escapeHtml(slot.courseName || courseName(snapshot, slot.classId))}</strong><span>${escapeHtml(PERIOD_TIMES[Number(slot.period)]?.start || "")} · ${escapeHtml(slot.room || "教室未取得")}</span></div>`).join("") || `<p class="stalog-context-empty">今日の時間割はありません。</p>`}</div>`;
+    if (scene === "mypage") return `${progressBlock(snapshot, preferences)}<h3>スタログ上の未完了</h3>${taskRows(allPending, snapshot, preferences, 5)}`;
+    if (scene === "class") return `${courseBlock(course, snapshot)}<h3>この科目の未整理</h3>${taskRows(coursePending, snapshot, preferences)}<button class="stalog-context-wide" type="button" data-action="dashboard" data-view="courses">科目カルテを開く</button>`;
+    if (scene === "directory") return `${courseBlock(course, snapshot)}<h3>この回の未整理</h3>${taskRows(directoryPending, snapshot, preferences)}<button class="stalog-context-wide" type="button" data-action="dashboard" data-view="courses">科目カルテを開く</button>`;
+    return `${nextCourseBlock(snapshot)}${progressBlock(snapshot, preferences)}`;
+  }
+
+  function sceneTitle(scene) {
+    return ({ top: "今日のブリーフ", schedule: "時間割", mypage: "課題状況", class: "科目の状況", directory: "この授業回", other: "学習状況" })[scene] || "学習状況";
+  }
+
+  function dashboardView(scene) {
+    if (scene === "mypage") return "tasks";
+    if (scene === "class" || scene === "directory") return "courses";
+    return "home";
+  }
+
+  async function renderCompanion(root) {
+    if (!root || isQuizScreen()) return;
+    const [snapshot, preferences] = await Promise.all([readSnapshot(), readPreferences()]);
+    const scene = pageScene();
+    root.querySelector("#stalog-bridge-toggle").innerHTML = `<span class="stalog-context-dot">S</span><span>${escapeHtml(compactLabel(scene, snapshot, preferences))}</span>`;
+    root.querySelector("#stalog-context-body").innerHTML = sceneContent(scene, snapshot, preferences);
+    root.querySelector("#stalog-context-title").textContent = sceneTitle(scene);
+    root.querySelector('[data-action="dashboard"][data-footer]').dataset.view = dashboardView(scene);
+    const updated = snapshot.collectedAt ? new Date(snapshot.collectedAt).toLocaleString("ja-JP") : "未取得";
+    root.querySelector("#stalog-bridge-status").textContent = `最終取得: ${updated}`;
   }
 
   function installUi() {
-    if (document.getElementById(ROOT_ID)) return;
+    if (isQuizScreen() || document.getElementById(ROOT_ID)) return;
     const root = document.createElement("div");
     root.id = ROOT_ID;
     root.innerHTML = `
       <div id="stalog-bridge-panel" aria-live="polite">
-        <h2>Stalog Bridge</h2>
-        <p>ログイン済みセッションで必要な学習状況だけを読み取り、端末内に保存します。</p>
+        <div class="stalog-context-head"><div><span>STALOG</span><h2 id="stalog-context-title">学習状況</h2></div><button type="button" data-action="close" aria-label="閉じる">×</button></div>
+        <div id="stalog-context-body"></div>
         <div class="stalog-bridge-actions">
           <button class="stalog-bridge-primary" type="button" data-action="collect">取得して保存</button>
-          <button type="button" data-action="export">JSONを書き出す</button>
-          <button type="button" data-action="dashboard">ダッシュボードを開く</button>
+          <button type="button" data-action="dashboard" data-footer>ダッシュボード</button>
+          <button type="button" data-action="export">JSON</button>
         </div>
         <p id="stalog-bridge-status"></p>
       </div>
-      <button id="stalog-bridge-toggle" type="button">スタログ収集</button>`;
+      <button id="stalog-bridge-toggle" type="button"><span class="stalog-context-dot">S</span><span>読み込み中…</span></button>`;
     document.documentElement.append(root);
-    const panel = root.querySelector("#stalog-bridge-panel");
-    const status = root.querySelector("#stalog-bridge-status");
-    const render = async () => { status.textContent = describe(await readSnapshot()); };
-    root.querySelector("#stalog-bridge-toggle").addEventListener("click", async () => {
-      panel.dataset.open = panel.dataset.open === "true" ? "false" : "true";
-      await render();
+    root.addEventListener("click", async (event) => {
+      const action = event.target.closest("[data-action]")?.dataset.action;
+      const panel = root.querySelector("#stalog-bridge-panel");
+      if (event.target.closest("#stalog-bridge-toggle")) {
+        panel.dataset.open = panel.dataset.open === "true" ? "false" : "true";
+        if (panel.dataset.open === "true") await renderCompanion(root);
+        return;
+      }
+      if (action === "close") { panel.dataset.open = "false"; return; }
+      if (action === "collect") {
+        const button = event.target.closest("button");
+        button.disabled = true;
+        root.querySelector("#stalog-bridge-status").textContent = "取得中…";
+        try { await collect(); await renderCompanion(root); }
+        catch (error) { root.querySelector("#stalog-bridge-status").textContent = `取得できませんでした: ${error.message}`; }
+        finally { button.disabled = false; }
+        return;
+      }
+      if (action === "export") {
+        const snapshot = await readSnapshot();
+        if (!snapshot.collectedAt) { root.querySelector("#stalog-bridge-status").textContent = "先に取得してください。"; return; }
+        exportSnapshot(snapshot);
+        root.querySelector("#stalog-bridge-status").textContent = "JSONを書き出しました。";
+        return;
+      }
+      if (action === "dashboard") {
+        chrome.runtime.sendMessage({ type: "stalog-bridge:open-dashboard", view: event.target.closest("[data-view]")?.dataset.view || dashboardView(pageScene()) });
+        return;
+      }
+      const manual = event.target.closest("[data-context-manual]");
+      if (manual) {
+        const preferences = await readPreferences();
+        preferences.manualCompleted = [...new Set([...preferences.manualCompleted, manual.dataset.contextManual])];
+        await savePreferences(preferences);
+        await renderCompanion(root);
+      }
     });
-    root.querySelector('[data-action="collect"]').addEventListener("click", async (event) => {
-      event.currentTarget.disabled = true;
-      status.textContent = "取得中…";
-      try { status.textContent = describe(await collect()); }
-      catch (error) { status.textContent = `取得できませんでした: ${error.message}`; }
-      finally { event.currentTarget.disabled = false; }
-    });
-    root.querySelector('[data-action="export"]').addEventListener("click", async () => {
-      const snapshot = await readSnapshot();
-      if (!snapshot.collectedAt) { status.textContent = "先に「取得して保存」を実行してください。"; return; }
-      exportSnapshot(snapshot);
-      status.textContent = "JSONを書き出しました。共有前に内容を確認してください。";
-    });
-    root.querySelector('[data-action="dashboard"]').addEventListener("click", () => {
-      chrome.runtime.sendMessage({ type: "stalog-bridge:open-dashboard" });
-    });
+    renderCompanion(root);
   }
 
+  let pageHookInjected = false;
   function injectPageHook() {
-    if (document.querySelector("script[data-stalog-bridge-hook]")) return;
+    if (pageHookInjected) return;
+    pageHookInjected = true;
     const script = document.createElement("script");
     script.src = chrome.runtime.getURL("page-hook.js");
     script.dataset.stalogBridgeHook = "true";
@@ -586,27 +825,69 @@
     await saveSnapshot(snapshot);
   });
 
+  window.addEventListener("stalog-bridge:location-change", () => syncPageMode(true));
+
   let observerTimer;
+  let lastContextLocation = "";
+  let lastQuizMode;
+
+  function notifyPageMode(quiz) {
+    const result = chrome.runtime.sendMessage({ type: "stalog-bridge:page-mode", quiz });
+    result?.catch?.(() => {});
+  }
+
+  function syncPageMode(forceRender = false) {
+    const quiz = isQuizScreen();
+    if (quiz !== lastQuizMode) {
+      notifyPageMode(quiz);
+      lastQuizMode = quiz;
+    }
+    if (quiz) {
+      document.getElementById(ROOT_ID)?.remove();
+      lastContextLocation = location.href;
+      return;
+    }
+
+    injectPageHook();
+    const root = document.getElementById(ROOT_ID);
+    if (!root) installUi();
+    else if (forceRender || lastContextLocation !== location.href) renderCompanion(root);
+    lastContextLocation = location.href;
+  }
+
   function observeCurrentPage() {
-    const observer = new MutationObserver(() => {
+    const observer = new MutationObserver((mutations) => {
+      const outsideCompanion = mutations.some((mutation) => !mutation.target.closest?.(`#${ROOT_ID}`));
+      if (!outsideCompanion) return;
+      if (isQuizScreen()) {
+        syncPageMode(false);
+        return;
+      }
       clearTimeout(observerTimer);
       observerTimer = setTimeout(async () => {
+        syncPageMode(true);
+        if (isQuizScreen()) return;
         const snapshot = await readSnapshot();
         mergeCurrentPage(snapshot);
-        if (snapshot.collectedAt) await saveSnapshot(snapshot);
+        if (snapshot.collectedAt) {
+          await saveSnapshot(snapshot);
+          await renderCompanion(document.getElementById(ROOT_ID));
+        }
       }, 300);
     });
     observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["directory_id", "href", "class"] });
   }
 
   chrome.runtime.onMessage.addListener((message) => {
-    if (message?.type === "stalog-bridge:toggle") document.querySelector("#stalog-bridge-toggle")?.click();
+    if (message?.type === "stalog-bridge:toggle" && !isQuizScreen()) document.querySelector("#stalog-bridge-toggle")?.click();
   });
 
-  injectPageHook();
   const initialize = () => {
-    installUi();
+    syncPageMode(true);
     observeCurrentPage();
+    window.addEventListener("popstate", () => syncPageMode(true));
+    window.addEventListener("hashchange", () => syncPageMode(true));
+    window.setInterval(() => syncPageMode(false), 750);
   };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initialize, { once: true });
   else initialize();
