@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Stalog Bridge",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "スタログの場面に合う学習情報を表示し、採用した11機能のダッシュボードで確認します。",
   "permissions": ["storage"],
   "host_permissions": ["https://portal.iwasaki.ac.jp/*"],

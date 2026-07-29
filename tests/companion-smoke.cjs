@@ -64,6 +64,11 @@ const server = http.createServer((request, response) => {
   await visit("/lms/class/10183/", "科目の状況");
   assert.match(await page.locator("#stalog-bridge-toggle").innerText(), /Javaプログラミング/);
   await visit("/lms/class/10183/153094/", "この授業回");
+  const directoryText = await page.locator("#stalog-context-body").innerText();
+  assert.match(directoryText, /この回の未整理/);
+  assert.match(directoryText, /同じ科目のほかの未整理/);
+  assert.match(directoryText, /\(H\)ダイジェスト_01補講/);
+  assert.match(directoryText, /\(H\)ダイジェスト_02補講/);
 
   for (const route of [
     "/lms/content/10183/quiz/123/",

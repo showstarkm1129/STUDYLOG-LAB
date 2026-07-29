@@ -713,6 +713,7 @@
     const allPending = pendingReports(snapshot, preferences);
     const coursePending = pendingReports(snapshot, preferences, { classId: context.classId });
     const directoryPending = pendingReports(snapshot, preferences, { classId: context.classId, directoryId: context.directoryId });
+    const otherCoursePending = coursePending.filter((report) => String(report.directoryId || "") !== String(context.directoryId || ""));
     const alerts = array(snapshot.courses).filter((item) => !isArchived(item, snapshot) && absenceMargin(item) !== null && absenceMargin(item) <= 2);
     const today = todayCourseBlocks(snapshot);
     if (!snapshot.collectedAt) return `<p class="stalog-context-empty">まだ収集していません。「取得して保存」を押してください。</p>`;
@@ -720,7 +721,7 @@
     if (scene === "schedule") return `${nextCourseBlock(snapshot)}<h3>今日の授業</h3><div class="stalog-context-list">${today.map((slot) => `<div class="stalog-context-line"><strong>${escapeHtml(slot.period)}限 ${escapeHtml(slot.courseName || courseName(snapshot, slot.classId))}</strong><span>${escapeHtml(PERIOD_TIMES[Number(slot.period)]?.start || "")} · ${escapeHtml(slot.room || "教室未取得")}</span></div>`).join("") || `<p class="stalog-context-empty">今日の時間割はありません。</p>`}</div>`;
     if (scene === "mypage") return `${progressBlock(snapshot, preferences)}<h3>スタログ上の未完了</h3>${taskRows(allPending, snapshot, preferences, 5)}`;
     if (scene === "class") return `${courseBlock(course, snapshot)}<h3>この科目の未整理</h3>${taskRows(coursePending, snapshot, preferences)}<button class="stalog-context-wide" type="button" data-action="dashboard" data-view="courses">科目カルテを開く</button>`;
-    if (scene === "directory") return `${courseBlock(course, snapshot)}<h3>この回の未整理</h3>${taskRows(directoryPending, snapshot, preferences)}<button class="stalog-context-wide" type="button" data-action="dashboard" data-view="courses">科目カルテを開く</button>`;
+    if (scene === "directory") return `${courseBlock(course, snapshot)}<h3>この回の未整理</h3>${taskRows(directoryPending, snapshot, preferences)}<h3>同じ科目のほかの未整理</h3>${taskRows(otherCoursePending, snapshot, preferences)}<button class="stalog-context-wide" type="button" data-action="dashboard" data-view="courses">科目カルテを開く</button>`;
     return `${nextCourseBlock(snapshot)}${progressBlock(snapshot, preferences)}`;
   }
 
