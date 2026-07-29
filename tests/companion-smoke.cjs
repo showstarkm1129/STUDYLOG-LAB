@@ -60,6 +60,12 @@ const server = http.createServer((request, response) => {
   await page.locator("[data-context-manual]").first().click();
   await page.waitForFunction(() => document.body.dataset.manualCompleted === "1");
   assert.notEqual(await page.locator("#stalog-bridge-toggle").innerText(), compactBefore);
+  assert.equal(await page.locator('[data-context-manual][data-checked="true"]').count(), 1);
+  if (screenshotPath) await page.screenshot({ path: screenshotPath.replace(/(\.png)?$/, "-checked.png"), fullPage: true });
+  await page.locator('[data-context-manual][data-checked="true"]').click();
+  await page.waitForFunction(() => document.body.dataset.manualCompleted === "0");
+  assert.equal(await page.locator('[data-context-manual][data-checked="true"]').count(), 0);
+  assert.equal(await page.locator("#stalog-bridge-toggle").innerText(), compactBefore);
 
   await visit("/lms/class/10183/", "科目の状況");
   assert.match(await page.locator("#stalog-bridge-toggle").innerText(), /Javaプログラミング/);

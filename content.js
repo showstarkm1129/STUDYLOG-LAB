@@ -654,13 +654,17 @@
     return courseMap(snapshot).get(String(classId))?.name || `科目 ${classId || "不明"}`;
   }
 
-  function pendingReports(snapshot, preferences, filters = {}) {
+  function portalPendingReports(snapshot, filters = {}) {
     return array(snapshot.reports).filter((report) => {
-      if (!isPortalPending(report) || isManualComplete(report, preferences)) return false;
+      if (!isPortalPending(report)) return false;
       if (filters.classId && String(report.classId) !== String(filters.classId)) return false;
       if (filters.directoryId && String(report.directoryId) !== String(filters.directoryId)) return false;
       return true;
     });
+  }
+
+  function pendingReports(snapshot, preferences, filters = {}) {
+    return portalPendingReports(snapshot, filters).filter((report) => !isManualComplete(report, preferences));
   }
 
   function compactLabel(scene, snapshot, preferences) {
@@ -679,10 +683,18 @@
 
   function taskRows(reports, snapshot, preferences, limit = 3) {
     if (!reports.length) return `<p class="stalog-context-empty">該当する未整理項目はありません。</p>`;
-    return `<div class="stalog-context-list">${reports.slice(0, limit).map((report) => {
+    const manualOrder = new Map(array(preferences.manualCompleted).map((key, index) => [key, index]));
+    const unchecked = reports.filter((report) => !isManualComplete(report, preferences));
+    const checked = reports
+      .filter((report) => isManualComplete(report, preferences))
+      .sort((a, b) => (manualOrder.get(reportKey(b)) ?? -1) - (manualOrder.get(reportKey(a)) ?? -1));
+    const visible = [...unchecked.slice(0, limit), ...checked.slice(0, 2)];
+    return `<div class="stalog-context-list">${visible.map((report) => {
       const href = String(report.href || "").startsWith("/") ? report.href : "";
-      return `<div class="stalog-context-task"><button type="button" data-context-manual="${escapeHtml(reportKey(report))}" title="完了扱いにする">✓</button><div><strong>${escapeHtml(report.title || "名称なし")}</strong><span>${escapeHtml(courseName(snapshot, report.classId))} · ${escapeHtml(report.status || "状態なし")}</span></div>${href ? `<a href="${escapeHtml(href)}">開く</a>` : ""}</div>`;
-    }).join("")}</div>`;
+      const completed = isManualComplete(report, preferences);
+      const label = completed ? "チェックを外して未整理へ戻す" : "チェックして完了扱いにする";
+      return `<div class="stalog-context-task" data-manual-complete="${completed}"><button class="stalog-context-check" type="button" data-context-manual="${escapeHtml(reportKey(report))}" data-checked="${completed}" aria-pressed="${completed}" aria-label="${label}" title="${label}">✓</button><div><strong>${escapeHtml(report.title || "名称なし")}</strong><span>${escapeHtml(courseName(snapshot, report.classId))} · ${escapeHtml(report.status || "状態なし")}${completed ? " · 手動完了" : ""}</span></div>${href ? `<a href="${escapeHtml(href)}">開く</a>` : ""}</div>`;
+    }).join("")}<div class="stalog-context-list-summary">未整理 ${unchecked.length}件 · チェック済み ${checked.length}件</div></div>`;
   }
 
   function nextCourseBlock(snapshot) {
@@ -710,9 +722,9 @@
   function sceneContent(scene, snapshot, preferences) {
     const context = readClassContext();
     const course = courseMap(snapshot).get(String(context.classId));
-    const allPending = pendingReports(snapshot, preferences);
-    const coursePending = pendingReports(snapshot, preferences, { classId: context.classId });
-    const directoryPending = pendingReports(snapshot, preferences, { classId: context.classId, directoryId: context.directoryId });
+    const allPending = portalPendingReports(snapshot);
+    const coursePending = portalPendingReports(snapshot, { classId: context.classId });
+    const directoryPending = portalPendingReports(snapshot, { classId: context.classId, directoryId: context.directoryId });
     const otherCoursePending = coursePending.filter((report) => String(report.directoryId || "") !== String(context.directoryId || ""));
     const alerts = array(snapshot.courses).filter((item) => !isArchived(item, snapshot) && absenceMargin(item) !== null && absenceMargin(item) <= 2);
     const today = todayCourseBlocks(snapshot);
@@ -796,7 +808,10 @@
       const manual = event.target.closest("[data-context-manual]");
       if (manual) {
         const preferences = await readPreferences();
-        preferences.manualCompleted = [...new Set([...preferences.manualCompleted, manual.dataset.contextManual])];
+        const completed = new Set(preferences.manualCompleted);
+        if (completed.has(manual.dataset.contextManual)) completed.delete(manual.dataset.contextManual);
+        else completed.add(manual.dataset.contextManual);
+        preferences.manualCompleted = [...completed];
         await savePreferences(preferences);
         await renderCompanion(root);
       }

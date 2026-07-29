@@ -164,9 +164,26 @@
 .stalog-context-line:last-child { border-bottom: 0; }
 .stalog-context-task > div { display: grid; flex: 1; min-width: 0; }
 .stalog-context-task strong { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.stalog-context-task > button { border-radius: 50% !important; flex: 0 0 25px; height: 25px; padding: 0 !important; }
+#stalog-bridge-panel .stalog-context-task > button.stalog-context-check {
+  background: #fff;
+  border: 2px solid var(--stalog-green);
+  border-radius: 8px;
+  color: transparent;
+  flex: 0 0 32px;
+  font-size: 18px;
+  font-weight: 900;
+  height: 32px;
+  line-height: 1;
+  padding: 0;
+}
+#stalog-bridge-panel .stalog-context-task > button.stalog-context-check:hover { background: #e4f2e9; color: transparent; }
+#stalog-bridge-panel .stalog-context-task > button.stalog-context-check[data-checked="true"],
+#stalog-bridge-panel .stalog-context-task > button.stalog-context-check[data-checked="true"]:hover { background: var(--stalog-green); color: #fff; }
+.stalog-context-task[data-manual-complete="true"] { background: #f3f7f4; }
+.stalog-context-task[data-manual-complete="true"] strong { color: #526159; }
 .stalog-context-task a { color: var(--stalog-green); flex: 0 0 auto; font-size: 11px; font-weight: 700; text-decoration: none; }
 .stalog-context-line > strong { font-size: 12px; }
+.stalog-context-list-summary { background: #f7f9f7; color: var(--stalog-muted); font-size: 10px; padding: 6px 10px; text-align: right; }
 .stalog-context-empty { color: var(--stalog-muted); padding: 3px 1px; }
 .stalog-context-warning { background: #fff4d6; border-radius: 8px; color: #765210; padding: 8px 10px; }
 
