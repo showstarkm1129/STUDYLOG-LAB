@@ -349,11 +349,23 @@
     return isoDay(date);
   }
 
+  function isUnitExamTitle(value) {
+    const title = String(value || "").normalize("NFKC");
+    return title.includes("単位認定試験") && !/(練習|模擬|対策|弱点|過去)/.test(title);
+  }
+
   function unitExamForSlot(slot) {
     if (!slot?.date || !slot?.classId) return null;
+    if (slot.directoryId) {
+      return array(state.snapshot?.directories).find((directory) =>
+        String(directory.classId) === String(slot.classId)
+        && String(directory.directoryId) === String(slot.directoryId)
+        && isUnitExamTitle(directory.title)
+      ) || null;
+    }
     return array(state.snapshot?.directories).find((directory) =>
       String(directory.classId) === String(slot.classId)
-      && String(directory.title || "").normalize("NFKC").includes("単位認定試験")
+      && isUnitExamTitle(directory.title)
       && unitExamDirectoryDate(directory) === slot.date
     ) || null;
   }

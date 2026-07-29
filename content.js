@@ -3,6 +3,9 @@
 
   const STORAGE_KEY = "stalogBridgeSnapshotV1";
   const PREFS_KEY = "stalogDashboardPreferencesV1";
+  const AUTO_COLLECT_STATE_KEY = "stalogBridgeAutoCollectV1";
+  const AUTO_COLLECT_INTERVAL_MS = 30 * 60 * 1000;
+  const AUTO_COLLECT_RETRY_MS = 5 * 60 * 1000;
   const ROOT_ID = "stalog-bridge-root";
   const CLASS_PATH = /\/lms\/class\/(?:grade\/)?(?<classId>\d+)(?:\/(?<directoryId>\d+))?/;
   const ATTENDANCE_THRESHOLD = 0.75;
@@ -316,7 +319,7 @@
       // 連続時限は「2 〃」のように時限番号の後へ省略記号が付く。
       const continuation = !route.classId && /^(?:[1-6]\s*)?〃(?:\s|$)/.test(rawText);
       const inherited = continuation ? lastCourseByColumn.get(columnIndex) : undefined;
-      const course = route.classId ? { classId: route.classId, courseName: text(link), room: parsedRoom } : inherited;
+      const course = route.classId ? { classId: route.classId, directoryId: route.directoryId, courseName: text(link), room: parsedRoom } : inherited;
       if (!course?.classId) return;
       if (route.classId) lastCourseByColumn.set(columnIndex, course);
       const dateLabel = headerLabels.find((label) => dateFromLabel(label)) || dateButtons[columnIndex - 1];
@@ -347,6 +350,7 @@
       return {
         cellIndex: index,
         classId: route.classId,
+        directoryId: route.directoryId,
         courseName: text(link),
         text: text(cell),
         href: link ? new URL(link.getAttribute("href"), location.origin).pathname : undefined
@@ -677,11 +681,23 @@
     return courseMap(snapshot).get(String(classId))?.name || `科目 ${classId || "不明"}`;
   }
 
+  function isUnitExamTitle(value) {
+    const title = String(value || "").normalize("NFKC");
+    return title.includes("単位認定試験") && !/(練習|模擬|対策|弱点|過去)/.test(title);
+  }
+
   function unitExamForSlot(snapshot, slot) {
     if (!slot?.date || !slot?.classId) return null;
     const academicYear = Number(snapshot.academicYear || new Date().getFullYear());
+    if (slot.directoryId) {
+      return array(snapshot.directories).find((directory) =>
+        String(directory.classId) === String(slot.classId)
+        && String(directory.directoryId) === String(slot.directoryId)
+        && isUnitExamTitle(directory.title)
+      ) || null;
+    }
     return array(snapshot.directories).find((directory) => {
-      if (String(directory.classId) !== String(slot.classId) || !String(directory.title || "").normalize("NFKC").includes("単位認定試験")) return false;
+      if (String(directory.classId) !== String(slot.classId) || !isUnitExamTitle(directory.title)) return false;
       const lessonDate = directory.lessonDate || dateFromLessonText(directory.title, academicYear);
       return lessonDate === slot.date;
     }) || null;
@@ -830,6 +846,57 @@
     markUnitExamTimetable(snapshot);
   }
 
+  let automaticCollectionPromise;
+  let automaticCollectionRetryAt = 0;
+
+  function automaticCollectionAllowed() {
+    return !isQuizScreen() && location.hostname === "portal.iwasaki.ac.jp" && document.visibilityState !== "hidden";
+  }
+
+  async function automaticCollectionDue() {
+    const stored = await chrome.storage.local.get([STORAGE_KEY, AUTO_COLLECT_STATE_KEY]);
+    const snapshot = stored[STORAGE_KEY];
+    const state = stored[AUTO_COLLECT_STATE_KEY] || {};
+    const startedAt = Date.parse(state.startedAt || "") || 0;
+    const completedAt = Date.parse(state.completedAt || "") || 0;
+    if (startedAt > completedAt && Date.now() - startedAt < AUTO_COLLECT_RETRY_MS) return false;
+    const latest = Math.max(Date.parse(snapshot?.collectedAt || "") || 0, completedAt);
+    return Date.now() - latest >= AUTO_COLLECT_INTERVAL_MS;
+  }
+
+  async function runAutomaticCollection() {
+    if (!automaticCollectionAllowed() || automaticCollectionPromise || Date.now() < automaticCollectionRetryAt) return automaticCollectionPromise;
+    if (!await automaticCollectionDue()) return null;
+    const root = document.getElementById(ROOT_ID);
+    automaticCollectionPromise = (async () => {
+      if (root) root.querySelector("#stalog-bridge-status").textContent = "自動取得中…";
+      try {
+        await chrome.storage.local.set({ [AUTO_COLLECT_STATE_KEY]: { startedAt: new Date().toISOString() } });
+        const snapshot = await collect();
+        await chrome.storage.local.set({ [AUTO_COLLECT_STATE_KEY]: { completedAt: new Date().toISOString() } });
+        await renderCompanion(root);
+        return snapshot;
+      } catch (error) {
+        automaticCollectionRetryAt = Date.now() + AUTO_COLLECT_RETRY_MS;
+        window.setTimeout(runAutomaticCollection, AUTO_COLLECT_RETRY_MS);
+        if (root) root.querySelector("#stalog-bridge-status").textContent = `自動取得を再試行します: ${error.message}`;
+        return null;
+      } finally {
+        automaticCollectionPromise = null;
+      }
+    })();
+    return automaticCollectionPromise;
+  }
+
+  async function captureCurrentPageAutomatically() {
+    if (isQuizScreen()) return;
+    const snapshot = await readSnapshot();
+    mergeCurrentPage(snapshot);
+    if (!snapshot.collectedAt) return;
+    await saveSnapshot(snapshot);
+    await renderCompanion(document.getElementById(ROOT_ID));
+  }
+
   function installUi() {
     if (isQuizScreen() || document.getElementById(ROOT_ID)) return;
     const root = document.createElement("div");
@@ -860,7 +927,12 @@
         const button = event.target.closest("button");
         button.disabled = true;
         root.querySelector("#stalog-bridge-status").textContent = "取得中…";
-        try { await collect(); await renderCompanion(root); }
+        try {
+          const snapshot = automaticCollectionPromise ? await automaticCollectionPromise : await collect();
+          if (!snapshot) throw new Error("取得を完了できませんでした");
+          await chrome.storage.local.set({ [AUTO_COLLECT_STATE_KEY]: { completedAt: new Date().toISOString() } });
+          await renderCompanion(root);
+        }
         catch (error) { root.querySelector("#stalog-bridge-status").textContent = `取得できませんでした: ${error.message}`; }
         finally { button.disabled = false; }
         return;
@@ -978,6 +1050,13 @@
   const initialize = () => {
     syncPageMode(true);
     observeCurrentPage();
+    window.setTimeout(() => {
+      captureCurrentPageAutomatically().catch(() => null).finally(runAutomaticCollection);
+    }, 500);
+    window.setInterval(runAutomaticCollection, AUTO_COLLECT_INTERVAL_MS);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") runAutomaticCollection();
+    });
     window.addEventListener("popstate", () => syncPageMode(true));
     window.addEventListener("hashchange", () => syncPageMode(true));
     window.setInterval(() => syncPageMode(false), 750);
