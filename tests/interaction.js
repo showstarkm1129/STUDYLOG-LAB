@@ -12,8 +12,8 @@
 
   try {
     const snapshot = await fetch("/__fixture").then((response) => response.json());
-    localStorage.setItem("stalogBridgeSnapshotV1", JSON.stringify(snapshot));
-    localStorage.setItem("stalogDashboardPreferencesV1", JSON.stringify({ manualCompleted: [] }));
+    localStorage.setItem("studylogBridgeSnapshotV1", JSON.stringify(snapshot));
+    localStorage.setItem("studylogDashboardPreferencesV1", JSON.stringify({ manualCompleted: [] }));
     const frame = document.createElement("iframe");
     frame.src = "/dashboard.html?view=tasks&now=2026-07-28T09:30:00";
     document.body.append(frame);

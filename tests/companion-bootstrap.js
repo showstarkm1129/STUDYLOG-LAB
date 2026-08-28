@@ -8,13 +8,28 @@
     { classId: "10183", directoryId: "990003", title: "(D)テスト用ダイジェスト60点", status: "完了 (60/100点)", kind: "クイズ", href: "/lms/class/10183/990003/" },
     { classId: "10183", directoryId: "990003", title: "(H)テスト用ダイジェスト60点補講", status: "未完了", kind: "クイズ", href: "/lms/class/10183/990003/" }
   );
+  snapshot.reports.unshift({ classId: "10183", directoryId: "990004", title: "日付表示の確認", status: "未完了", kind: "課題", href: "/lms/class/10183/990004/" });
+  if (/\/lms\/class\/10183\/153094\/?$/.test(location.pathname)) {
+    snapshot.reports.unshift(
+      { classId: "10183", directoryId: "153094", title: "課題27 SSL 提出先", status: "未完了", kind: "課題", href: "/lms/class/10183/153094/" },
+      { classId: "10183", directoryId: "153094", title: "課題28 SSL 提出先", status: "未完了", kind: "課題", href: "/lms/class/10183/153094/" }
+    );
+  }
+  snapshot.directories.push({ classId: "10183", directoryId: "990004", title: "第99回", lessonDate: "2026-07-31" });
   const state = {
-    stalogBridgeSnapshotV1: snapshot,
-    stalogDashboardPreferencesV1: { manualCompleted: [] }
+    studylogBridgeSnapshotV1: snapshot,
+    studylogDashboardPreferencesV1: { manualCompleted: [] }
   };
   const route = location.pathname.match(/\/lms\/class\/(?:grade\/)?(?<classId>\d+)(?:\/(?<directoryId>\d+))?/);
   if (route?.groups?.classId) document.querySelector("#input-current-class-id").value = route.groups.classId;
   if (route?.groups?.directoryId) document.querySelector("#div-class-contents").setAttribute("directory_id", route.groups.directoryId);
+  if (route?.groups?.directoryId === "153094") {
+    document.querySelector("#div-class-contents").innerHTML = `
+      <table><tbody>
+        <tr><td><a href="/lms/content/10183/report/27/">課題27 SSL 提出先</a></td><td>-</td></tr>
+        <tr><td><a href="/lms/content/10183/report/28/">課題28 SSL 提出先</a></td><td>-</td></tr>
+      </tbody></table>`;
+  }
   if (new URLSearchParams(location.search).get("quizDom") === "1") {
     document.querySelector("#portal-fixture").insertAdjacentHTML("beforeend", '<div id="div-quiz-question">quiz</div>');
   }
@@ -38,15 +53,16 @@
         },
         async set(values) {
           Object.assign(state, values);
-          document.body.dataset.manualCompleted = String(state.stalogDashboardPreferencesV1?.manualCompleted?.length || 0);
+          document.body.dataset.manualCompleted = String(state.studylogDashboardPreferencesV1?.manualCompleted?.length || 0);
+          document.body.dataset.notRequired = String(state.studylogDashboardPreferencesV1?.notRequired?.length || 0);
         }
       }
     },
     runtime: {
       getURL(path) { return new URL(`/${path}`, location.origin).href; },
       sendMessage(message) {
-        if (message?.type === "stalog-bridge:page-mode") document.body.dataset.pageMode = message.quiz ? "quiz" : "normal";
-        if (message?.type === "stalog-bridge:open-dashboard") document.body.dataset.dashboardView = message.view || "home";
+        if (message?.type === "studylog-bridge:page-mode") document.body.dataset.pageMode = message.quiz ? "quiz" : "normal";
+        if (message?.type === "studylog-bridge:open-dashboard") document.body.dataset.dashboardView = message.view || "home";
         return Promise.resolve();
       },
       onMessage: { addListener() {} }
@@ -59,6 +75,9 @@
     script.addEventListener("load", resolve, { once: true });
     document.head.append(script);
   });
+  await loadScript("/attendance-rules.js");
   await loadScript("/digest-rules.js");
+  await loadScript("/task-rules.js");
+  await loadScript("/auto-sync-rules.js");
   await loadScript("/content.js");
 })();

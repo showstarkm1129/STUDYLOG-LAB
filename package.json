@@ -1,0 +1,27 @@
+{
+  "name": "studylog-lab",
+  "version": "1.0.0",
+  "description": "ログイン済みのスタログから学習状況を**読み取り専用**で収集し、端末内のダッシュボードで確認する Chrome 拡張機能です。",
+  "main": "attendance-rules.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/showstarkm1129/sutarogu.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/showstarkm1129/sutarogu/issues"
+  },
+  "homepage": "https://github.com/showstarkm1129/sutarogu#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^26.2.0"
+  }
+}

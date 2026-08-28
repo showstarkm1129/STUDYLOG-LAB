@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Studylog Dashboard — カードサイズ構想</title>
+    <link rel="stylesheet" href="dashboard.css">
+    <style>
+      body { min-width: 1120px; }
+
+      .mock-view { max-width: 1420px; }
+      .mock-header-note { max-width: 650px; }
+      .mock-header-note strong { color: var(--ink); }
+
+      .edit-banner {
+        align-items: center;
+        background: var(--ink);
+        border-radius: 15px;
+        color: var(--surface);
+        display: flex;
+        gap: 14px;
+        justify-content: space-between;
+        margin-bottom: 18px;
+        padding: 13px 16px;
+      }
+      .edit-banner-copy { align-items: center; display: flex; gap: 11px; }
+      .edit-banner-copy > span {
+        align-items: center;
+        background: var(--brand);
+        border-radius: 50%;
+        display: inline-flex;
+        font-size: 14px;
+        height: 30px;
+        justify-content: center;
+        width: 30px;
+      }
+      .edit-banner strong { display: block; font-size: 12px; }
+      .edit-banner small { color: color-mix(in srgb, var(--surface) 65%, transparent); display: block; font-size: 9px; margin-top: 2px; }
+      .edit-banner-actions { display: flex; gap: 7px; }
+      .edit-banner .secondary-button { background: transparent; border-color: color-mix(in srgb, var(--surface) 28%, transparent); color: var(--surface); }
+      .edit-banner .primary-button { background: var(--surface); color: var(--ink); }
+
+      .grid-ruler {
+        display: grid;
+        gap: 4px;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        margin: 0 2px 7px;
+      }
+      .grid-ruler span {
+        color: var(--muted);
+        font-size: 8px;
+        font-weight: 800;
+        text-align: center;
+      }
+      .grid-ruler span::before { background: var(--line); content: ""; display: block; height: 3px; margin-bottom: 4px; }
+
+      .size-grid {
+        display: grid;
+        gap: 14px;
+        grid-auto-flow: row;
+        grid-auto-rows: 210px;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+      }
+      .widget-small { grid-column: span 4; grid-row: span 1; }
+      .widget-medium { grid-column: span 6; grid-row: span 1; }
+      .widget-large { grid-column: span 12; grid-row: span 2; }
+
+      .mock-card { display: flex; flex-direction: column; isolation: isolate; padding-top: 52px; }
+      .mock-card::after {
+        border: 1px dashed color-mix(in srgb, var(--brand) 28%, transparent);
+        border-radius: calc(var(--radius) - 4px);
+        content: "";
+        inset: 5px;
+        pointer-events: none;
+        position: absolute;
+        z-index: -1;
+      }
+      .mock-card-content { min-height: 0; }
+      .widget-large .mock-card-content { flex: 1; }
+
+      .widget-editor {
+        align-items: center;
+        background: color-mix(in srgb, var(--brand-soft) 70%, var(--surface));
+        border-bottom: 1px solid color-mix(in srgb, var(--brand) 15%, var(--line));
+        display: flex;
+        gap: 8px;
+        inset: 0 0 auto;
+        min-height: 40px;
+        padding: 7px 10px;
+        position: absolute;
+        z-index: 2;
+      }
+      .drag-handle { color: var(--muted); cursor: grab; font-size: 16px; letter-spacing: 1px; line-height: 1; }
+      .widget-size-name { color: var(--brand); font-size: 9px; font-weight: 900; letter-spacing: .08em; margin-right: auto; }
+      .size-choices { display: flex; gap: 3px; }
+      .size-choice {
+        align-items: center;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        color: var(--muted);
+        display: inline-flex;
+        font-size: 8px;
+        font-weight: 900;
+        height: 23px;
+        justify-content: center;
+        min-width: 23px;
+        padding: 0 6px;
+      }
+      .size-choice.is-selected { background: var(--brand); border-color: var(--brand); color: #fff; }
+      .size-choice.is-disabled { opacity: .28; text-decoration: line-through; }
+
+      .mock-card .card-head { margin-bottom: 11px; }
+      .mock-card .card-head h2 { font-size: 13px; }
+      .mock-card .card-head p { font-size: 9px; }
+      .mock-number { font-size: 42px; font-weight: 900; letter-spacing: -.06em; line-height: 1; }
+      .mock-number small { color: var(--muted); font-size: 11px; letter-spacing: 0; margin-left: 4px; }
+      .mock-foot { color: var(--muted); font-size: 9px; margin-top: 10px; }
+
+      .compact-next { align-items: end; display: flex; justify-content: space-between; }
+      .compact-next h3 { font-size: 22px; letter-spacing: -.04em; margin: 3px 0 4px; }
+      .compact-next p { color: var(--muted); font-size: 9px; margin: 0; }
+      .period-chip {
+        align-items: baseline;
+        background: var(--ink);
+        border-radius: 13px;
+        color: var(--surface);
+        display: flex;
+        font-size: 29px;
+        font-weight: 900;
+        height: 64px;
+        justify-content: center;
+        padding-top: 13px;
+        width: 64px;
+      }
+      .period-chip span { font-size: 9px; margin-left: 2px; }
+
+      .mini-alert { align-items: center; display: flex; gap: 14px; }
+      .mini-alert-icon {
+        align-items: center;
+        background: var(--danger-soft);
+        border-radius: 15px;
+        color: var(--danger);
+        display: flex;
+        font-size: 22px;
+        height: 58px;
+        justify-content: center;
+        width: 58px;
+      }
+      .mini-alert strong { display: block; font-size: 25px; line-height: 1; }
+      .mini-alert span { color: var(--muted); display: block; font-size: 9px; margin-top: 6px; }
+
+      .medium-summary { display: grid; gap: 9px; grid-template-columns: repeat(3, 1fr); }
+      .medium-summary > div { background: var(--surface-soft); border-radius: 11px; padding: 12px; }
+      .medium-summary strong { display: block; font-size: 23px; letter-spacing: -.04em; }
+      .medium-summary span { color: var(--muted); display: block; font-size: 8px; margin-top: 3px; }
+
+      .completion-compact { align-items: center; display: grid; gap: 18px; grid-template-columns: auto 1fr; }
+      .completion-ring {
+        align-items: center;
+        background: conic-gradient(var(--good) 0 72%, var(--surface-strong) 72% 100%);
+        border-radius: 50%;
+        display: flex;
+        height: 86px;
+        justify-content: center;
+        width: 86px;
+      }
+      .completion-ring::after { background: var(--surface); border-radius: 50%; content: "72%"; display: grid; font-size: 17px; font-weight: 900; height: 64px; place-items: center; width: 64px; }
+      .bar-line { margin-bottom: 10px; }
+      .bar-copy { display: flex; font-size: 8px; justify-content: space-between; margin-bottom: 4px; }
+      .bar-track { background: var(--surface-strong); border-radius: 999px; height: 5px; overflow: hidden; }
+      .bar-fill { background: var(--good); border-radius: inherit; height: 100%; }
+
+      .large-layout { display: grid; gap: 22px; grid-template-columns: .9fr 1.1fr; height: 100%; }
+      .large-panel { min-width: 0; }
+      .large-panel + .large-panel { border-left: 1px solid var(--line); padding-left: 22px; }
+      .lesson-list, .candidate-list { display: grid; gap: 8px; }
+      .lesson-row, .candidate-row {
+        align-items: center;
+        background: var(--surface-soft);
+        border-radius: 11px;
+        display: grid;
+        gap: 11px;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        padding: 10px;
+      }
+      .lesson-time, .candidate-order {
+        align-items: center;
+        background: var(--brand-soft);
+        border-radius: 9px;
+        color: var(--brand);
+        display: flex;
+        font-size: 10px;
+        font-weight: 900;
+        height: 34px;
+        justify-content: center;
+        width: 34px;
+      }
+      .lesson-row strong, .candidate-row strong { display: block; font-size: 10px; }
+      .lesson-row span, .candidate-row span { color: var(--muted); display: block; font-size: 8px; margin-top: 3px; }
+      .row-tag { border: 1px solid var(--line); border-radius: 999px; color: var(--muted) !important; font-size: 7px !important; margin: 0 !important; padding: 4px 7px; }
+
+      .size-key {
+        display: grid;
+        gap: 8px;
+        grid-template-columns: repeat(3, 1fr);
+        margin-top: 18px;
+      }
+      .size-key-item { align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; display: flex; gap: 10px; padding: 10px 12px; }
+      .size-key-shape { background: var(--brand-soft); border: 1px solid color-mix(in srgb, var(--brand) 22%, transparent); border-radius: 5px; display: block; height: 20px; }
+      .size-key-shape.small { width: 34px; }
+      .size-key-shape.medium { width: 51px; }
+      .size-key-shape.large { height: 27px; width: 68px; }
+      .size-key-item strong { display: block; font-size: 10px; }
+      .size-key-item span { color: var(--muted); display: block; font-size: 8px; margin-top: 2px; }
+    </style>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="メインメニュー">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">S</span>
+          <div><strong>Studylog</strong><span>student dashboard</span></div>
+        </div>
+        <nav class="main-nav">
+          <button class="nav-item is-active" type="button"><span>⌂</span>ホーム</button>
+          <button class="nav-item" type="button"><span>✓</span>課題</button>
+          <button class="nav-item" type="button"><span>◔</span>出席</button>
+          <button class="nav-item" type="button"><span>□</span>科目</button>
+        </nav>
+        <div class="sidebar-foot">
+          <div class="privacy-note"><span aria-hidden="true">●</span> レイアウト構想モック</div>
+          <button class="quiet-button full-width" type="button">初期配置に戻す</button>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div class="topbar-title"><strong>学習状況</strong><span>カードサイズ構想</span></div>
+          <div class="topbar-actions">
+            <span class="local-badge">● デスクトップ表示</span>
+            <button class="secondary-button" type="button">プレビューを終了</button>
+          </div>
+        </header>
+
+        <section class="view mock-view">
+          <div class="page-header">
+            <div class="mock-header-note">
+              <p class="eyebrow">LAYOUT MOCKUP</p>
+              <h1>3つの固定サイズ</h1>
+              <p><strong>横12列・縦210px単位</strong>の盤面に、小・中・大のカードを配置したイメージです。</p>
+            </div>
+            <div class="header-actions"><button class="primary-button" type="button">配置を編集</button></div>
+          </div>
+
+          <div class="edit-banner">
+            <div class="edit-banner-copy">
+              <span aria-hidden="true">✣</span>
+              <div><strong>配置を編集中</strong><small>カードを移動し、許可されたサイズだけを選択できます。</small></div>
+            </div>
+            <div class="edit-banner-actions">
+              <button class="secondary-button" type="button">キャンセル</button>
+              <button class="primary-button" type="button">配置を保存</button>
+            </div>
+          </div>
+
+          <div class="grid-ruler" aria-label="12列グリッド">
+            <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span>
+            <span>7</span><span>8</span><span>9</span><span>10</span><span>11</span><span>12</span>
+          </div>
+
+          <div class="size-grid">
+            <section class="card mock-card widget-small tint-brand">
+              <div class="widget-editor"><span class="drag-handle">⠿</span><span class="widget-size-name">小 · 4×1</span><div class="size-choices"><span class="size-choice is-selected">小</span><span class="size-choice">中</span><span class="size-choice is-disabled">大</span></div></div>
+              <div class="mock-card-content">
+                <div class="card-head"><div><h2>次の科目</h2><p>9:00開始</p></div></div>
+                <div class="compact-next"><div><h3>Webアプリ基礎S</h3><p>201教室 · あと24分</p></div><div class="period-chip">1<span>限</span></div></div>
+              </div>
+            </section>
+
+            <section class="card mock-card widget-small">
+              <div class="widget-editor"><span class="drag-handle">⠿</span><span class="widget-size-name">小 · 4×1</span><div class="size-choices"><span class="size-choice is-selected">小</span><span class="size-choice">中</span><span class="size-choice">大</span></div></div>
+              <div class="mock-card-content">
+                <div class="card-head"><div><h2>今日の未完了</h2><p>今日の3科目</p></div></div>
+                <div class="mock-number">4<small>件</small></div>
+                <p class="mock-foot">最優先：課題12 フォーム実装</p>
+              </div>
+            </section>
+
+            <section class="card mock-card widget-small tint-accent">
+              <div class="widget-editor"><span class="drag-handle">⠿</span><span class="widget-size-name">小 · 4×1</span><div class="size-choices"><span class="size-choice is-selected">小</span><span class="size-choice">中</span><span class="size-choice is-disabled">大</span></div></div>
+              <div class="mock-card-content">
+                <div class="card-head"><div><h2>出席アラート</h2><p>欠席余裕2回以下</p></div></div>
+                <div class="mini-alert"><div class="mini-alert-icon">!</div><div><strong>2科目</strong><span>早めの確認がおすすめです</span></div></div>
+              </div>
+            </section>
+
+            <section class="card mock-card widget-medium">
+              <div class="widget-editor"><span class="drag-handle">⠿</span><span class="widget-size-name">中 · 6×1</span><div class="size-choices"><span class="size-choice is-disabled">小</span><span class="size-choice is-selected">中</span><span class="size-choice">大</span></div></div>
+              <div class="mock-card-content">
+                <div class="card-head"><div><h2>今日の科目の全体像</h2><p>今日やることをまとめて確認</p></div></div>
+                <div class="medium-summary">
+                  <div><strong>4</strong><span>未完了</span></div>
+                  <div><strong>72%</strong><span>整理済み</span></div>
+                  <div><strong>1</strong><span>手動で完了</span></div>
+                </div>
+              </div>
+            </section>
+
+            <section class="card mock-card widget-medium tint-good">
+              <div class="widget-editor"><span class="drag-handle">⠿</span><span class="widget-size-name">中 · 6×1</span><div class="size-choices"><span class="size-choice">小</span><span class="size-choice is-selected">中</span><span class="size-choice is-disabled">大</span></div></div>
+              <div class="mock-card-content">
+                <div class="card-head"><div><h2>課題の整理率</h2><p>選択した今日の3科目</p></div></div>
+                <div class="completion-compact">
+                  <div class="completion-ring"></div>
+                  <div>
+                    <div class="bar-line"><div class="bar-copy"><span>実施して完了</span><strong>6</strong></div><div class="bar-track"><div class="bar-fill" style="width:78%"></div></div></div>
+                    <div class="bar-line"><div class="bar-copy"><span>手動で完了</span><strong>1</strong></div><div class="bar-track"><div class="bar-fill" style="width:22%;background:var(--warn)"></div></div></div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="card mock-card widget-large">
+              <div class="widget-editor"><span class="drag-handle">⠿</span><span class="widget-size-name">大 · 12×2</span><div class="size-choices"><span class="size-choice is-disabled">小</span><span class="size-choice">中</span><span class="size-choice is-selected">大</span></div></div>
+              <div class="mock-card-content large-layout">
+                <div class="large-panel">
+                  <div class="card-head"><div><h2>今日の授業</h2><p>7月30日 木曜日 · 3科目</p></div></div>
+                  <div class="lesson-list">
+                    <div class="lesson-row"><span class="lesson-time">1限</span><div><strong>Webアプリ基礎S</strong><span>9:00 · 201教室</span></div><span class="row-tag">次の科目</span></div>
+                    <div class="lesson-row"><span class="lesson-time">3限</span><div><strong>ネットワーク演習</strong><span>11:00 · 304教室</span></div><span class="row-tag">通常授業</span></div>
+                    <div class="lesson-row"><span class="lesson-time">5限</span><div><strong>データベース設計</strong><span>13:40 · 205教室</span></div><span class="row-tag">通常授業</span></div>
+                  </div>
+                </div>
+                <div class="large-panel">
+                  <div class="card-head"><div><h2>次に確認する候補</h2><p>期限と種類から並べた上位3件</p></div></div>
+                  <div class="candidate-list">
+                    <div class="candidate-row"><span class="candidate-order">1</span><div><strong>課題12 フォーム実装</strong><span>Webアプリ基礎S · 今日</span></div><span class="row-tag">優先度 高</span></div>
+                    <div class="candidate-row"><span class="candidate-order">2</span><div><strong>確認テスト 第8回</strong><span>ネットワーク演習 · 今日</span></div><span class="row-tag">優先度 中</span></div>
+                    <div class="candidate-row"><span class="candidate-order">3</span><div><strong>ER図の提出</strong><span>データベース設計 · 明日</span></div><span class="row-tag">優先度 中</span></div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div class="size-key">
+            <div class="size-key-item"><span class="size-key-shape small"></span><div><strong>小サイズ</strong><span>横4列 × 縦1マス</span></div></div>
+            <div class="size-key-item"><span class="size-key-shape medium"></span><div><strong>中サイズ</strong><span>横6列 × 縦1マス</span></div></div>
+            <div class="size-key-item"><span class="size-key-shape large"></span><div><strong>大サイズ</strong><span>横12列 × 縦2マス</span></div></div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

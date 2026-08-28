@@ -31,5 +31,5 @@
     return { state: "normal", role: reportRole, digest, scoreRate: rate };
   }
 
-  globalThis.StalogDigestRules = Object.freeze({ role, scoreRate, resolution });
+  globalThis.StudylogDigestRules = Object.freeze({ role, scoreRate, resolution });
 })();

@@ -5,7 +5,7 @@ const assert = require("node:assert/strict");
 const context = {};
 vm.createContext(context);
 vm.runInContext(fs.readFileSync("digest-rules.js", "utf8"), context);
-const rules = context.StalogDigestRules;
+const rules = context.StudylogDigestRules;
 const pair = (status) => [
   { classId: "1", directoryId: "10", title: "（D）ダイジェスト_01", status },
   { classId: "1", directoryId: "10", title: "(H)ダイジェスト_01補講", status: "未完了" }

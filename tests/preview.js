@@ -1,7 +1,7 @@
 (async () => {
   const response = await fetch("/__fixture");
   const snapshot = await response.json();
-  localStorage.setItem("stalogBridgeSnapshotV1", JSON.stringify(snapshot));
+  localStorage.setItem("studylogBridgeSnapshotV1", JSON.stringify(snapshot));
   const params = new URLSearchParams(location.search);
   const view = params.get("view") || "home";
   const now = params.get("now");

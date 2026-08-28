@@ -1,14 +1,18 @@
 (() => {
   "use strict";
 
-  const STORAGE_KEY = "stalogBridgeSnapshotV1";
-  const PREFS_KEY = "stalogDashboardPreferencesV1";
-  const AUTO_COLLECT_STATE_KEY = "stalogBridgeAutoCollectV1";
+  const STORAGE_KEY = "studylogBridgeSnapshotV1";
+  const PREFS_KEY = "studylogDashboardPreferencesV1";
+  const AUTO_COLLECT_STATE_KEY = "studylogBridgeAutoCollectV1";
   const AUTO_COLLECT_INTERVAL_MS = 30 * 60 * 1000;
   const AUTO_COLLECT_RETRY_MS = 5 * 60 * 1000;
-  const ROOT_ID = "stalog-bridge-root";
+  const STATUS_REFRESH_DELAY_MS = 15 * 1000;
+  const STATUS_REFRESH_SESSION_KEY = "studylogBridgeStatusRefreshV1";
+  const ROOT_ID = "studylog-bridge-root";
+  const QUIZ_INSPECTOR_ROOT_ID = "studylog-quiz-inspector-root";
+  const QUIZ_TRACE_SESSION_KEY = "studylogQuizTraceV1";
+  const QUIZ_TRACE_LIMIT = 250;
   const CLASS_PATH = /\/lms\/class\/(?:grade\/)?(?<classId>\d+)(?:\/(?<directoryId>\d+))?/;
-  const ATTENDANCE_THRESHOLD = 0.75;
   const PERIOD_TIMES = Object.freeze({
     1: { start: "09:00", end: "09:50" },
     2: { start: "10:00", end: "10:50" },
@@ -55,6 +59,10 @@
       || Boolean(document.querySelector('form[action*="/quiz/"][method="post"], #div-quiz-question, [data-page-type="quiz"]'));
   }
 
+  function isQuizDebugMode() {
+    return new URLSearchParams(location.search).get("studylogBridgeDebug") === "1";
+  }
+
   function pageScene() {
     if (isQuizScreen()) return "quiz";
     const kind = pageKind();
@@ -81,7 +89,7 @@
     };
   }
 
-  function readAcademicYear() {
+  function readAcademicYear(fallbackYear) {
     const candidates = [
       document.querySelector("#select-year")?.value,
       text(document.querySelector("#select-year option:checked")),
@@ -89,7 +97,7 @@
       document.querySelector("[data-academic-year]")?.getAttribute("data-academic-year")
     ];
     const found = candidates.map((value) => String(value || "").match(/(20\d{2})/)).find(Boolean);
-    return found ? Number(found[1]) : new Date().getFullYear();
+    return found ? Number(found[1]) : Number(fallbackYear || StudylogAutoSyncRules.currentAcademicYear());
   }
 
   function dateFromLessonText(value, academicYear) {
@@ -121,10 +129,10 @@
     })).filter((item) => item.directoryId), (item) => `${item.classId}:${item.directoryId}`);
   }
 
-  function readDirectories() {
+  function readDirectories(fallbackYear) {
     const context = readClassContext();
     if (!context.classId) return [];
-    return parseDirectoriesFromDocument(document, context.classId, readAcademicYear(), "classPageDom");
+    return parseDirectoriesFromDocument(document, context.classId, readAcademicYear(fallbackYear), "classPageDom");
   }
 
   function parseLessonList(html, classId, academicYear) {
@@ -492,15 +500,54 @@
     await chrome.storage.local.set({ [STORAGE_KEY]: snapshot });
   }
 
+  async function readAutoCollectState() {
+    const result = await chrome.storage.local.get(AUTO_COLLECT_STATE_KEY);
+    const state = result[AUTO_COLLECT_STATE_KEY] || {};
+    return { ...state, years: state.years || {} };
+  }
+
+  function yearOf(item, fallbackYear) {
+    return Number(item?.academicYear || fallbackYear || 0);
+  }
+
+  function itemsForYear(items, academicYear, fallbackYear) {
+    return array(items).filter((item) => yearOf(item, fallbackYear) === Number(academicYear));
+  }
+
+  function replaceYearItems(existing, incoming, academicYear, fallbackYear, key) {
+    const kept = array(existing).filter((item) => yearOf(item, fallbackYear) !== Number(academicYear));
+    const scoped = array(incoming).map((item) => ({ ...item, academicYear: Number(academicYear) }));
+    return uniqueBy([...kept, ...scoped], key);
+  }
+
+  function stampLegacyAcademicYear(snapshot, academicYear) {
+    for (const field of ["courses", "reports", "directories", "directoryItems"]) {
+      snapshot[field] = array(snapshot[field]).map((item) => item?.academicYear ? item : { ...item, academicYear: Number(academicYear) });
+    }
+  }
+
+  function prepareSnapshotForCurrentYear(snapshot) {
+    const previousYear = Number(snapshot.academicYear || readAcademicYear());
+    stampLegacyAcademicYear(snapshot, previousYear);
+    snapshot.academicYear = readAcademicYear(previousYear);
+    return snapshot;
+  }
+
+  function markSnapshotFreshness(snapshot, academicYear, changes) {
+    snapshot.freshnessByYear ||= {};
+    snapshot.freshnessByYear[academicYear] = { ...(snapshot.freshnessByYear[academicYear] || {}), ...changes };
+  }
+
   function mergeCurrentPage(snapshot) {
     snapshot.directories ||= [];
     snapshot.directoryItems ||= [];
     snapshot.visibleTimetable ||= [];
     snapshot.timetableSlots ||= [];
+    const academicYear = readAcademicYear(snapshot.academicYear);
     const kind = pageKind();
     if (kind === "class") {
-      snapshot.directories = mergeBy(snapshot.directories, readDirectories(), (item) => `${item.classId}:${item.directoryId}`);
-      snapshot.directoryItems = uniqueBy([...snapshot.directoryItems, ...readCurrentDirectoryItems(snapshot.reports)], (item) => `${item.classId}:${item.directoryId}:${item.title}:${item.dueText || ""}:${item.href || ""}`);
+      snapshot.directories = mergeBy(snapshot.directories, readDirectories(academicYear).map((item) => ({ ...item, academicYear })), (item) => `${item.classId}:${item.directoryId}`);
+      snapshot.directoryItems = uniqueBy([...snapshot.directoryItems, ...readCurrentDirectoryItems(snapshot.reports).map((item) => ({ ...item, academicYear }))], (item) => `${item.classId}:${item.directoryId}:${item.title}:${item.dueText || ""}:${item.href || ""}`);
     }
     if (kind === "top") {
       snapshot.visibleTimetable = readVisibleTimetable();
@@ -509,29 +556,44 @@
   }
 
   async function collect() {
-    const [subjectHtml, reportHtml, snapshot] = await Promise.all([
+    const [subjectHtml, reportHtml, snapshot, state] = await Promise.all([
       fetchText("/portal/lmsinc/mySubjectStatus.php"),
       fetchText("/portal/lmsinc/myReportStatus.php"),
-      readSnapshot()
+      readSnapshot(),
+      readAutoCollectState()
     ]);
+    const previousYear = Number(snapshot.academicYear || readAcademicYear());
+    const academicYear = readAcademicYear(previousYear);
+    const collectedAt = new Date().toISOString();
+    stampLegacyAcademicYear(snapshot, previousYear);
     snapshot.schemaVersion = 1;
-    snapshot.collectedAt = new Date().toISOString();
+    snapshot.collectedAt = collectedAt;
     snapshot.sourceOrigin = location.origin;
-    snapshot.courses = parseSubjectStatus(subjectHtml);
-    snapshot.reports = parseReportStatus(reportHtml);
+    snapshot.courses = replaceYearItems(snapshot.courses, parseSubjectStatus(subjectHtml), academicYear, previousYear, (item) => `${item.academicYear}:${item.classId}`);
+    snapshot.reports = replaceYearItems(snapshot.reports, parseReportStatus(reportHtml), academicYear, previousYear, (item) => `${item.academicYear}:${reportKey(item)}`);
     // 旧版は教材の説明本文まで保存していたため、安全な V2 形式へ置換する。
     snapshot.directoryItems = (snapshot.directoryItems || []).filter((item) => item.source !== "classPageDom");
+    snapshot.academicYear = academicYear;
     mergeCurrentPage(snapshot);
-    snapshot.academicYear = readAcademicYear();
     const classIds = [...new Set([
-      ...snapshot.courses.map((course) => course.classId),
-      ...snapshot.reports.map((report) => report.classId)
+      ...itemsForYear(snapshot.courses, academicYear, previousYear).map((course) => course.classId),
+      ...itemsForYear(snapshot.reports, academicYear, previousYear).map((report) => report.classId)
     ])];
-    const directories = await fetchAllCourseDirectories(classIds, snapshot.academicYear);
-    snapshot.directories = mergeBy(snapshot.directories, directories, (item) => `${item.classId}:${item.directoryId}`);
-    snapshot.lessonListCollectedAt = new Date().toISOString();
+    const directories = await fetchAllCourseDirectories(classIds, academicYear);
+    snapshot.directories = replaceYearItems(snapshot.directories, directories, academicYear, previousYear, (item) => `${item.academicYear}:${item.classId}:${item.directoryId}`);
+    snapshot.lessonListCollectedAt = collectedAt;
     snapshot.collectedClassCount = classIds.length;
-    await saveSnapshot(snapshot);
+    markSnapshotFreshness(snapshot, academicYear, { reportStatusCollectedAt: collectedAt, subjectStatusCollectedAt: collectedAt, directoriesCollectedAt: collectedAt });
+    const yearState = state.years[academicYear] || {};
+    state.years[academicYear] = {
+      ...yearState,
+      reportStatusCollectedAt: collectedAt,
+      subjectStatusCollectedAt: collectedAt,
+      directoriesByClass: Object.fromEntries(classIds.map((classId) => [classId, collectedAt]))
+    };
+    state.completedAt = collectedAt;
+    delete state.lastError;
+    await chrome.storage.local.set({ [STORAGE_KEY]: snapshot, [AUTO_COLLECT_STATE_KEY]: state });
     return snapshot;
   }
 
@@ -540,14 +602,15 @@
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `stalog-bridge-${new Date().toISOString().slice(0, 10)}.json`;
+    anchor.download = `studylog-bridge-${new Date().toISOString().slice(0, 10)}.json`;
     anchor.click();
     URL.revokeObjectURL(url);
   }
 
   async function readPreferences() {
     const result = await chrome.storage.local.get(PREFS_KEY);
-    return { manualCompleted: [], ...(result[PREFS_KEY] || {}) };
+    const stored = result[PREFS_KEY] || {};
+    return { ...stored, manualCompleted: array(stored.manualCompleted), notRequired: array(stored.notRequired), completionIncludedCourseIds: Array.isArray(stored.completionIncludedCourseIds) ? stored.completionIncludedCourseIds.map(String) : null };
   }
 
   async function savePreferences(preferences) {
@@ -555,9 +618,7 @@
   }
 
   function reportKey(report) {
-    return [report.classId, report.directoryId, report.kind, normalize(report.title), report.href]
-      .map((value) => String(value || ""))
-      .join("::");
+    return StudylogTaskRules.reportKey(report);
   }
 
   function isPortalPending(report) {
@@ -572,8 +633,16 @@
     return new Set(preferences.manualCompleted).has(reportKey(report));
   }
 
+  function isNotRequired(report, preferences) {
+    return isPortalPending(report) && StudylogTaskRules.isNotRequired(report, preferences);
+  }
+
+  function notRequiredMatch(report, snapshot, preferences) {
+    return StudylogTaskRules.notRequiredMatch(report, array(snapshot.reports), preferences);
+  }
+
   function digestResolution(report, snapshot) {
-    return StalogDigestRules.resolution(report, array(snapshot.reports));
+    return StudylogDigestRules.resolution(report, array(snapshot.reports));
   }
 
   function isDigestAutoComplete(report, snapshot) {
@@ -584,9 +653,15 @@
     return digestResolution(report, snapshot).state === "deferred";
   }
 
+  function isCompletionCourseIncluded(report, preferences) {
+    const selected = preferences.completionIncludedCourseIds;
+    return !Array.isArray(selected) || selected.includes(String(report?.classId));
+  }
+
   function isEffectivelyPending(report, snapshot, preferences) {
     return isPortalPending(report)
       && !isManualComplete(report, preferences)
+      && !isNotRequired(report, preferences)
       && !isDigestAutoComplete(report, snapshot)
       && !isDigestDeferred(report, snapshot);
   }
@@ -600,8 +675,7 @@
   }
 
   function absenceMargin(course) {
-    const total = Number(course?.totalLessons || 0);
-    return total ? Math.floor(total * (1 - ATTENDANCE_THRESHOLD) + 1e-8) - Number(course.absent || 0) : null;
+    return StudylogAttendanceRules.absenceMargin(course);
   }
 
   function courseEndDate(course, snapshot) {
@@ -610,7 +684,7 @@
     if (last) {
       const month = Number(last[2]);
       const day = Number(last[3]);
-      const academicYear = Number(snapshot.academicYear || new Date().getFullYear());
+      const academicYear = Number(course?.academicYear || snapshot.academicYear || new Date().getFullYear());
       const year = Number(last[1] || academicYear + (month <= 3 ? 1 : 0));
       const date = new Date(year, month - 1, day);
       if (date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day) return date;
@@ -704,7 +778,7 @@
   }
 
   function unitExamLabel() {
-    return '<em class="stalog-unit-exam-label">重要：単位認定試験</em>';
+    return '<em class="studylog-unit-exam-label">重要：単位認定試験</em>';
   }
 
   function timetableCourseLine(slot, snapshot, { showTime = false } = {}) {
@@ -712,7 +786,7 @@
     const meta = showTime
       ? `${PERIOD_TIMES[Number(slot.period)]?.start || ""} · ${slot.room ? `${slot.room}教室` : "教室未取得"}`
       : slot.room || "教室未取得";
-    return `<div class="stalog-context-line${exam ? " stalog-context-unit-exam" : ""}"><strong>${escapeHtml(slot.period)}限 ${escapeHtml(slot.courseName || courseName(snapshot, slot.classId))}${exam ? unitExamLabel() : ""}</strong><span>${escapeHtml(meta)}</span></div>`;
+    return `<div class="studylog-context-line${exam ? " studylog-context-unit-exam" : ""}"><strong>${escapeHtml(slot.period)}限 ${escapeHtml(slot.courseName || courseName(snapshot, slot.classId))}${exam ? unitExamLabel() : ""}</strong><span>${escapeHtml(meta)}</span></div>`;
   }
 
   function markUnitExamTimetable(snapshot) {
@@ -727,18 +801,18 @@
       const cell = grid[slot.rowIndex]?.[slot.columnIndex];
       if (!cell) return;
       const exam = unitExamForSlot(snapshot, slot);
-      cell.classList.toggle("stalog-unit-exam-cell", Boolean(exam));
+      cell.classList.toggle("studylog-unit-exam-cell", Boolean(exam));
       if (!exam) return;
       const header = grid.slice(0, slot.rowIndex).map((row) => row[slot.columnIndex]).reverse().find((candidate) => dateFromLabel(text(candidate)));
       if (header) examHeaders.add(header);
     });
-    const currentHeaders = table.querySelectorAll(".stalog-unit-exam-day");
-    new Set([...currentHeaders, ...examHeaders]).forEach((header) => header.classList.toggle("stalog-unit-exam-day", examHeaders.has(header)));
+    const currentHeaders = table.querySelectorAll(".studylog-unit-exam-day");
+    new Set([...currentHeaders, ...examHeaders]).forEach((header) => header.classList.toggle("studylog-unit-exam-day", examHeaders.has(header)));
   }
 
   function portalPendingReports(snapshot, preferences, filters = {}) {
     return array(snapshot.reports).filter((report) => {
-      if (!isPortalPending(report) || isDigestAutoComplete(report, snapshot) || isDigestDeferred(report, snapshot)) return false;
+      if (!isPortalPending(report) || isNotRequired(report, preferences) || isDigestAutoComplete(report, snapshot) || isDigestDeferred(report, snapshot)) return false;
       if (filters.classId && String(report.classId) !== String(filters.classId)) return false;
       if (filters.directoryId && String(report.directoryId) !== String(filters.directoryId)) return false;
       return true;
@@ -762,47 +836,72 @@
     const next = nextDifferentCourse(snapshot, new Date(), { todayOnly: scene === "top" });
     if (unitExamForSlot(snapshot, next)) return `重要：単位認定試験 · ${next.courseName || courseName(snapshot, next.classId)}`;
     if (next) return `次: ${next.courseName || courseName(snapshot, next.classId)} ${PERIOD_TIMES[Number(next.period)].start}`;
-    return "Stalog Dashboard";
+    return "Studylog Dashboard";
+  }
+
+  function formatContextDate(value) {
+    if (!value) return "";
+    const date = new Date(`${value}T00:00:00`);
+    if (Number.isNaN(date.valueOf())) return "";
+    return new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric", weekday: "short" }).format(date);
+  }
+
+  function reportContextDate(report, snapshot, directories) {
+    const directory = directories.get(`${report.classId}:${report.directoryId}`);
+    const academicYear = Number(report?.academicYear || directory?.academicYear || snapshot.academicYear || new Date().getFullYear());
+    const scheduledAt = dateFromLessonText(report.scheduledAt, academicYear);
+    if (scheduledAt) return { label: "実施日", value: scheduledAt };
+    const lessonDate = directory?.lessonDate || dateFromLessonText(directory?.title, academicYear);
+    return lessonDate ? { value: lessonDate } : null;
   }
 
   function taskRows(reports, snapshot, preferences, { limit = 3, showChecked = true } = {}) {
-    if (!reports.length) return `<p class="stalog-context-empty">該当する未整理項目はありません。</p>`;
+    if (!reports.length) return `<p class="studylog-context-empty">該当する未整理項目はありません。</p>`;
+    const directories = new Map(array(snapshot.directories).map((directory) => [`${directory.classId}:${directory.directoryId}`, directory]));
     const manualOrder = new Map(array(preferences.manualCompleted).map((key, index) => [key, index]));
-    const unchecked = reports.filter((report) => !isManualComplete(report, preferences));
+    const unchecked = reports
+      .filter((report) => !isManualComplete(report, preferences))
+      .sort((left, right) => Number(Boolean(notRequiredMatch(left, snapshot, preferences))) - Number(Boolean(notRequiredMatch(right, snapshot, preferences))));
     const checked = (showChecked ? reports : [])
       .filter((report) => isManualComplete(report, preferences))
       .sort((a, b) => (manualOrder.get(reportKey(b)) ?? -1) - (manualOrder.get(reportKey(a)) ?? -1));
     const visible = [...unchecked.slice(0, limit), ...checked.slice(0, 2)];
-    return `<div class="stalog-context-list">${visible.map((report) => {
+    return `<div class="studylog-context-list">${visible.map((report) => {
       const href = String(report.href || "").startsWith("/") ? report.href : "";
       const completed = isManualComplete(report, preferences);
       const label = completed ? "チェックを外して未整理へ戻す" : "チェックして完了扱いにする";
-      return `<div class="stalog-context-task" data-manual-complete="${completed}"><button class="stalog-context-check" type="button" data-context-manual="${escapeHtml(reportKey(report))}" data-checked="${completed}" aria-pressed="${completed}" aria-label="${label}" title="${label}">✓</button><div><strong>${escapeHtml(report.title || "名称なし")}</strong><span>${escapeHtml(courseName(snapshot, report.classId))} · ${escapeHtml(report.status || "状態なし")}${completed ? " · 手動で完了" : ""}</span></div>${href ? `<a href="${escapeHtml(href)}">開く</a>` : ""}</div>`;
-    }).join("")}<div class="stalog-context-list-summary">未完了 ${unchecked.length}件${showChecked ? ` · チェック済み ${checked.length}件` : ""}</div></div>`;
+      const possibleNotRequired = !completed && notRequiredMatch(report, snapshot, preferences);
+      const contextDate = reportContextDate(report, snapshot, directories);
+      const dateLabel = contextDate ? ` · ${contextDate.label ? `${contextDate.label} ` : ""}${formatContextDate(contextDate.value)}` : "";
+      return `<div class="studylog-context-task" data-manual-complete="${completed}" data-possible-not-required="${Boolean(possibleNotRequired)}"><button class="studylog-context-check" type="button" data-context-manual="${escapeHtml(reportKey(report))}" data-checked="${completed}" aria-pressed="${completed}" aria-label="${label}" title="${label}">✓</button><div><strong>${escapeHtml(report.title || "名称なし")}</strong>${possibleNotRequired ? `<em class="studylog-possible-not-required" title="${escapeHtml(possibleNotRequired.reason)}">対応不要の可能性</em>` : ""}<span>${escapeHtml(courseName(snapshot, report.classId))}${escapeHtml(dateLabel)} · ${escapeHtml(report.status || "状態なし")}${completed ? " · 手動で完了" : ""}</span></div><div class="studylog-context-task-actions"><button type="button" data-context-not-required="${escapeHtml(reportKey(report))}">対応不要</button>${href ? `<a href="${escapeHtml(href)}">開く</a>` : ""}</div></div>`;
+    }).join("")}<div class="studylog-context-list-summary">未完了 ${unchecked.length}件${showChecked ? ` · チェック済み ${checked.length}件` : ""}</div></div>`;
   }
 
   function nextCourseBlock(snapshot, { todayOnly = false } = {}) {
     const next = nextDifferentCourse(snapshot, new Date(), { todayOnly });
-    if (!next) return `<div class="stalog-context-feature"><span>次の科目</span><strong>${todayOnly ? "今日の授業は終了" : "判定できません"}</strong><small>${todayOnly ? "次の授業日は表示しません" : "次の授業日を含む時間割を収集してください"}</small></div>`;
+    if (!next) return `<div class="studylog-context-feature"><span>次の科目</span><strong>${todayOnly ? "次の授業はありません" : "判定できません"}</strong><small>${todayOnly ? "次の授業日は表示しません" : "次の授業日を含む時間割を収集してください"}</small></div>`;
     const time = PERIOD_TIMES[Number(next.period)];
     const exam = unitExamForSlot(snapshot, next);
-    return `<div class="stalog-context-feature stalog-context-next${exam ? " stalog-context-unit-exam" : ""}"><span>次の科目</span>${exam ? unitExamLabel() : ""}<strong>${escapeHtml(next.courseName || courseName(snapshot, next.classId))}</strong><small>${escapeHtml(next.period)}限 ${escapeHtml(time.start)} · ${escapeHtml(next.room ? `${next.room}教室` : "教室未取得")}</small></div>`;
+    return `<div class="studylog-context-feature studylog-context-next${exam ? " studylog-context-unit-exam" : ""}"><span>次の科目</span>${exam ? unitExamLabel() : ""}<strong>${escapeHtml(next.courseName || courseName(snapshot, next.classId))}</strong><small>${escapeHtml(next.period)}限 ${escapeHtml(time.start)} · ${escapeHtml(next.room ? `${next.room}教室` : "教室未取得")}</small></div>`;
   }
 
   function progressBlock(snapshot, preferences, classIds = null) {
-    const reports = array(snapshot.reports).filter((report) => (!classIds || classIds.has(String(report.classId))) && !isDigestDeferred(report, snapshot));
+    const reports = array(snapshot.reports).filter((report) => (!classIds || classIds.has(String(report.classId))) && isCompletionCourseIncluded(report, preferences) && !isNotRequired(report, preferences) && !isDigestDeferred(report, snapshot));
     const done = reports.filter((report) => isPortalDone(report) || isManualComplete(report, preferences) || isDigestAutoComplete(report, snapshot)).length;
     const rate = reports.length ? Math.round(done / reports.length * 100) : 0;
     const pending = reports.filter((report) => isEffectivelyPending(report, snapshot, preferences)).length;
-    return `<div class="stalog-context-feature"><span>${classIds ? "今日の科目の整理率" : "課題の整理率"}</span><strong>${rate}%</strong><small>${done}/${reports.length}件 · 未完了${pending}件</small></div>`;
+    const allCourseIds = new Set(array(snapshot.courses).map((course) => String(course.classId)).filter(Boolean));
+    const availableCourseIds = classIds || allCourseIds;
+    const selectedCourseIds = [...availableCourseIds].filter((classId) => isCompletionCourseIncluded({ classId }, preferences));
+    return `<div class="studylog-context-feature"><span>${classIds ? "今日の科目の整理率" : "課題の整理率"}</span><strong>${rate}%</strong><small>${done}/${reports.length}件 · 未完了${pending}件 · 対象${selectedCourseIds.length}/${availableCourseIds.size}科目</small></div>`;
   }
 
   function courseBlock(course, snapshot) {
-    if (!course) return `<p class="stalog-context-empty">この科目の収集データがありません。</p>`;
+    if (!course) return `<p class="studylog-context-empty">この科目の収集データがありません。</p>`;
     const margin = absenceMargin(course);
     const rate = Math.round(attendanceRate(course) * 100);
     const archived = isArchived(course, snapshot);
-    return `<div class="stalog-context-metrics"><div><span>出席扱い率</span><strong>${rate}%</strong></div><div><span>欠席余裕</span><strong>${margin ?? "—"}回</strong></div><div><span>状態</span><strong>${archived ? "終了" : "実施中"}</strong></div></div>`;
+    return `<div class="studylog-context-metrics"><div><span>出席扱い率</span><strong>${rate}%</strong></div><div><span>欠席余裕</span><strong>${margin ?? "—"}回</strong></div><div><span>状態</span><strong>${archived ? "終了" : "実施中"}</strong></div></div>`;
   }
 
   function sceneContent(scene, snapshot, preferences) {
@@ -814,17 +913,217 @@
     const today = todayCourseBlocks(snapshot);
     const todayClassIds = new Set(today.map((slot) => String(slot.classId)));
     const todayPending = allPending.filter((report) => todayClassIds.has(String(report.classId)));
-    if (!snapshot.collectedAt) return `<p class="stalog-context-empty">まだ収集していません。「取得して保存」を押してください。</p>`;
-    if (scene === "top") return `${nextCourseBlock(snapshot, { todayOnly: true })}${progressBlock(snapshot, preferences, todayClassIds)}<h3>今日の授業</h3><div class="stalog-context-list">${today.slice(0, 4).map((slot) => timetableCourseLine(slot, snapshot)).join("") || `<p class="stalog-context-empty">今日の時間割はありません。</p>`}</div><h3>次に確認する候補</h3>${taskRows(todayPending, snapshot, preferences, { showChecked: false })}`;
-    if (scene === "schedule") return `${nextCourseBlock(snapshot)}<h3>今日の授業</h3><div class="stalog-context-list">${today.map((slot) => timetableCourseLine(slot, snapshot, { showTime: true })).join("") || `<p class="stalog-context-empty">今日の時間割はありません。</p>`}</div>`;
+    if (!snapshot.collectedAt) return `<p class="studylog-context-empty">まだ収集していません。「取得して保存」を押してください。</p>`;
+    if (scene === "top") return `${nextCourseBlock(snapshot, { todayOnly: true })}<h3>今日の授業</h3><div class="studylog-context-list">${today.slice(0, 4).map((slot) => timetableCourseLine(slot, snapshot)).join("") || `<p class="studylog-context-empty">今日の時間割はありません。</p>`}</div><h3>次に確認する候補</h3>${taskRows(todayPending, snapshot, preferences, { showChecked: false })}`;
+    if (scene === "schedule") return `${nextCourseBlock(snapshot)}<h3>今日の授業</h3><div class="studylog-context-list">${today.map((slot) => timetableCourseLine(slot, snapshot, { showTime: true })).join("") || `<p class="studylog-context-empty">今日の時間割はありません。</p>`}</div>`;
     if (scene === "mypage") return `${progressBlock(snapshot, preferences)}<h3>スタログ上の未完了</h3>${taskRows(allPending, snapshot, preferences, { limit: 5 })}`;
-    if (scene === "class") return `${courseBlock(course, snapshot)}<h3>この科目の未整理</h3>${taskRows(coursePending, snapshot, preferences)}<button class="stalog-context-wide" type="button" data-action="dashboard" data-view="courses">科目カルテを開く</button>`;
-    if (scene === "directory") return `<h3>同じ授業のほかの回</h3>${taskRows(otherCoursePending, snapshot, preferences)}<button class="stalog-context-wide" type="button" data-action="dashboard" data-view="courses">科目カルテを開く</button>`;
+    if (scene === "class") return `${courseBlock(course, snapshot)}<h3>この科目の未整理</h3>${taskRows(coursePending, snapshot, preferences)}<button class="studylog-context-wide" type="button" data-action="dashboard" data-view="courses">科目カルテを開く</button>`;
+    if (scene === "directory") return `<h3>同じ授業のほかの回</h3>${taskRows(otherCoursePending, snapshot, preferences)}<button class="studylog-context-wide" type="button" data-action="dashboard" data-view="courses">科目カルテを開く</button>`;
     return `${nextCourseBlock(snapshot)}${progressBlock(snapshot, preferences)}`;
   }
 
   function sceneTitle(scene) {
     return ({ top: "今日のブリーフ", schedule: "時間割", mypage: "課題状況", class: "科目の状況", directory: "この授業回", other: "学習状況" })[scene] || "学習状況";
+  }
+
+  const quizTrace = [];
+  const QUIZ_TEXT_IDLE_SAVE_DELAY_MS = 30000;
+  let quizTraceRecording = true;
+  let quizAutoSaveTimer;
+  let quizAutoSaveInFlight = false;
+  let quizAutoSaveQueued = false;
+  let quizAutoSaveRequestId = "";
+  let quizAutoSaveTimeout;
+
+  function isQuizAnswerControl(target) {
+    return target instanceof HTMLElement
+      && /^answers\[/.test(String(target.getAttribute("name") || ""))
+      && target.getAttribute("type") !== "file";
+  }
+
+  function startQuizAutoSave() {
+    quizAutoSaveTimer = undefined;
+    if (!isQuizScreen() || !quizAutoSaveQueued || quizAutoSaveInFlight) return;
+    quizAutoSaveQueued = false;
+    quizAutoSaveInFlight = true;
+    quizAutoSaveRequestId = `autosave-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    window.dispatchEvent(new CustomEvent("studylog-bridge:quiz-save-request", { detail: { requestId: quizAutoSaveRequestId } }));
+    clearTimeout(quizAutoSaveTimeout);
+    quizAutoSaveTimeout = window.setTimeout(() => {
+      quizAutoSaveInFlight = false;
+      quizAutoSaveRequestId = "";
+      if (quizAutoSaveQueued) scheduleQuizAutoSave(250);
+    }, 12000);
+  }
+
+  function scheduleQuizAutoSave(delay = 800) {
+    if (!isQuizScreen()) return;
+    quizAutoSaveQueued = true;
+    clearTimeout(quizAutoSaveTimer);
+    quizAutoSaveTimer = window.setTimeout(startQuizAutoSave, delay);
+  }
+
+  function persistQuizTrace() {
+    try {
+      sessionStorage.setItem(QUIZ_TRACE_SESSION_KEY, JSON.stringify(quizTrace));
+    } catch {
+      // セッション領域が使えない環境では、そのページを開いている間だけ保持する。
+    }
+  }
+
+  function safeTraceUrl(value) {
+    try {
+      const url = new URL(String(value || ""), location.href);
+      const queryKeys = [...new Set(url.searchParams.keys())];
+      return `${url.origin === location.origin ? "" : url.origin}${url.pathname}${queryKeys.length ? `?${queryKeys.map(encodeURIComponent).join("&")}` : ""}`;
+    } catch {
+      return "(URLを取得できません)";
+    }
+  }
+
+  function normalizeTrace(detail) {
+    const parsedAt = new Date(detail?.at || Date.now());
+    const entry = {
+      at: Number.isNaN(parsedAt.valueOf()) ? new Date().toISOString() : parsedAt.toISOString(),
+      elapsedMs: Number(detail?.elapsedMs) || Math.round(performance.now()),
+      phase: String(detail?.phase || "signal").slice(0, 20),
+      transport: String(detail?.transport || "ui").slice(0, 20)
+    };
+    if (detail?.requestId) entry.requestId = String(detail.requestId).slice(0, 40);
+    if (detail?.method) entry.method = String(detail.method).slice(0, 12).toUpperCase();
+    if (detail?.url) entry.url = safeTraceUrl(detail.url);
+    if (detail?.signal) entry.signal = String(detail.signal).slice(0, 60);
+    if (detail?.control) entry.control = String(detail.control).slice(0, 120);
+    if (detail?.status !== undefined) entry.status = String(detail.status).slice(0, 20);
+    if (detail?.failed) entry.failed = true;
+    entry.fields = array(detail?.fields).map((field) => String(field).slice(0, 80)).filter(Boolean).slice(0, 40);
+    entry.hints = Object.fromEntries(Object.entries(detail?.hints || {})
+      .filter(([key]) => ["action", "back", "timeover", "select_page_number_flg", "page_number", "prev_page_number"].includes(key))
+      .map(([key, value]) => [key, String(value).slice(0, 100)]));
+    if (detail?.source) entry.source = String(detail.source).slice(0, 600);
+    return entry;
+  }
+
+  function isSaveCandidate(entry) {
+    const haystack = [entry.signal, entry.control, entry.url, ...entry.fields].join(" ");
+    return entry.phase !== "response" && /save|pause|suspend|interrupt|answer|response|quiz|submit|finish|complete|中断|保存|一時|解答|回答|提出|終了/i.test(haystack);
+  }
+
+  function traceSummary(entry) {
+    if (entry.transport === "ui") return entry.control ? `${entry.signal}: ${entry.control}` : entry.signal;
+    if (entry.transport === "form") return `${entry.signal}: ${entry.method} ${entry.url}`;
+    if (entry.phase === "response") return `${entry.transport} 応答 ${entry.status}: ${entry.url}`;
+    return `${entry.transport} ${entry.method}: ${entry.url}`;
+  }
+
+  function renderQuizTrace() {
+    const root = document.getElementById(QUIZ_INSPECTOR_ROOT_ID);
+    if (!root) return;
+    const list = root.querySelector("#studylog-quiz-trace-list");
+    const visible = quizTrace.slice(-80).reverse();
+    list.innerHTML = visible.map((entry) => `
+      <li data-candidate="${isSaveCandidate(entry)}">
+        <time>${escapeHtml(new Date(entry.at).toLocaleTimeString("ja-JP", { hour12: false }))}</time>
+        <div><strong>${escapeHtml(traceSummary(entry))}</strong>${entry.fields.length ? `<small>フィールド: ${escapeHtml(entry.fields.join(", "))}</small>` : ""}${Object.keys(entry.hints).length ? `<small>制御値: ${escapeHtml(Object.entries(entry.hints).map(([key, value]) => `${key}=${value}`).join(", "))}</small>` : ""}${entry.source ? `<small>呼出元: ${escapeHtml(entry.source)}</small>` : ""}</div>
+        ${isSaveCandidate(entry) ? "<span>候補</span>" : ""}
+      </li>`).join("") || '<li class="studylog-quiz-trace-empty">まだイベントはありません。</li>';
+    root.querySelector("#studylog-quiz-trace-count").textContent = `${quizTrace.length}件`;
+    root.querySelector('[data-quiz-action="record"]').textContent = quizTraceRecording ? "記録を停止" : "記録を再開";
+    root.querySelector("#studylog-quiz-trace-state").textContent = quizTraceRecording ? "記録中" : "停止中";
+  }
+
+  function recordQuizTrace(detail) {
+    if (!quizTraceRecording || !isQuizScreen()) return;
+    quizTrace.push(normalizeTrace(detail));
+    if (quizTrace.length > QUIZ_TRACE_LIMIT) quizTrace.splice(0, quizTrace.length - QUIZ_TRACE_LIMIT);
+    persistQuizTrace();
+    renderQuizTrace();
+  }
+
+  function controlMetadata(target) {
+    const control = target?.closest?.("button, input[type='button'], input[type='submit'], a, [role='button']");
+    if (!control || control.closest(`#${QUIZ_INSPECTOR_ROOT_ID}`)) return null;
+    const type = control.getAttribute("type") || control.tagName.toLowerCase();
+    const id = control.id ? `#${control.id}` : "";
+    const name = control.getAttribute("name") ? `[name=${control.getAttribute("name")}]` : "";
+    const action = control.getAttribute("data-action") ? `[action=${control.getAttribute("data-action")}]` : "";
+    const visibleText = text(control);
+    const label = /中断|保存|一時|次へ|前へ|戻る|確認|提出|終了|再開/.test(visibleText) ? `「${visibleText.slice(0, 40)}」` : "";
+    return `${control.tagName.toLowerCase()}${id}${name}${action}[type=${type}]${label}`;
+  }
+
+  function installQuizInspector() {
+    if (!isQuizScreen() || document.getElementById(QUIZ_INSPECTOR_ROOT_ID)) return;
+    const root = document.createElement("div");
+    root.id = QUIZ_INSPECTOR_ROOT_ID;
+    root.innerHTML = `
+      <section id="studylog-quiz-inspector-panel" data-open="true" aria-live="polite">
+        <header><div><span>STUDYLOG LAB</span><h2>クイズ保存調査</h2></div><button type="button" data-quiz-action="toggle" aria-label="折りたたむ">×</button></header>
+        <p class="studylog-quiz-inspector-note">解答内容は採取せず、操作と通信のメタデータだけをタブ内に記録します。</p>
+        <div class="studylog-quiz-inspector-status"><strong id="studylog-quiz-trace-state">記録中</strong><span id="studylog-quiz-trace-count">0件</span></div>
+        <ol id="studylog-quiz-trace-list"></ol>
+        <footer>
+          <button class="studylog-quiz-save-experiment" type="button" data-quiz-action="save">このページを保存</button>
+          <button type="button" data-quiz-action="record">記録を停止</button>
+          <button type="button" data-quiz-action="clear">消去</button>
+          <button type="button" data-quiz-action="copy">匿名ログをコピー</button>
+        </footer>
+        <p id="studylog-quiz-inspector-message">「候補」は保存に関係しそうな操作・通信です。</p>
+      </section>
+      <button id="studylog-quiz-inspector-toggle" type="button" data-quiz-action="toggle"><span>◎</span><span>保存調査</span></button>`;
+    document.documentElement.append(root);
+    root.addEventListener("click", async (event) => {
+      const action = event.target.closest("[data-quiz-action]")?.dataset.quizAction;
+      if (!action) return;
+      const panel = root.querySelector("#studylog-quiz-inspector-panel");
+      const message = root.querySelector("#studylog-quiz-inspector-message");
+      if (action === "toggle") {
+        panel.dataset.open = panel.dataset.open === "true" ? "false" : "true";
+        return;
+      }
+      if (action === "record") {
+        quizTraceRecording = !quizTraceRecording;
+        renderQuizTrace();
+        return;
+      }
+      if (action === "save") {
+        const button = event.target.closest("button");
+        const requestId = `save-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        button.disabled = true;
+        button.dataset.requestId = requestId;
+        message.textContent = "現在ページの保存要求を送信しています…";
+        window.dispatchEvent(new CustomEvent("studylog-bridge:quiz-save-request", { detail: { requestId } }));
+        window.setTimeout(() => {
+          if (button.dataset.requestId !== requestId) return;
+          button.disabled = false;
+          delete button.dataset.requestId;
+          message.textContent = "保存要求がタイムアウトしました。ログを確認してください。";
+        }, 10000);
+        return;
+      }
+      if (action === "clear") {
+        quizTrace.splice(0);
+        persistQuizTrace();
+        renderQuizTrace();
+        message.textContent = "ログを消去しました。";
+        return;
+      }
+      if (action === "copy") {
+        const payload = JSON.stringify({
+          schemaVersion: 1,
+          page: safeTraceUrl(location.href),
+          copiedAt: new Date().toISOString(),
+          entries: quizTrace
+        }, null, 2);
+        try {
+          await navigator.clipboard.writeText(payload);
+          message.textContent = "匿名ログをクリップボードへコピーしました。";
+        } catch {
+          message.textContent = "コピーできませんでした。ブラウザの権限を確認してください。";
+        }
+      }
+    });
+    renderQuizTrace();
   }
 
   function dashboardView(scene) {
@@ -833,64 +1132,283 @@
     return "home";
   }
 
-  async function renderCompanion(root) {
+  async function updateTaskDisposition(key, disposition) {
+    const preferences = await readPreferences();
+    const completed = new Set(array(preferences.manualCompleted));
+    const notRequired = new Set(array(preferences.notRequired));
+    if (disposition === "manual") {
+      if (completed.has(key)) completed.delete(key);
+      else {
+        completed.add(key);
+        notRequired.delete(key);
+      }
+    }
+    if (disposition === "not-required") {
+      if (notRequired.has(key)) notRequired.delete(key);
+      else {
+        notRequired.add(key);
+        completed.delete(key);
+      }
+    }
+    preferences.manualCompleted = [...completed];
+    preferences.notRequired = [...notRequired];
+    await savePreferences(preferences);
+    const snapshot = await readSnapshot();
+    await renderCompanion(document.getElementById(ROOT_ID), snapshot, preferences);
+  }
+
+  function inlineReportHost(root, report) {
+    const wanted = normalize(report.title);
+    if (!wanted) return null;
+    const direct = [...root.querySelectorAll("a, button, strong, [data-title], [title]")]
+      .find((element) => normalize(text(element)) === wanted || normalize(element.getAttribute?.("title")) === wanted);
+    if (direct) return direct.closest("td, li, .content-row, .class-content") || direct.parentElement;
+    return [...root.querySelectorAll("td, li")]
+      .filter((element) => normalize(text(element)).includes(wanted))
+      .sort((left, right) => text(left).length - text(right).length)[0] || null;
+  }
+
+  function inlineTaskMarkup(report, snapshot, preferences) {
+    const key = reportKey(report);
+    const manual = isManualComplete(report, preferences);
+    const notRequired = isNotRequired(report, preferences);
+    const portalDone = isPortalDone(report);
+    const digestDone = isDigestAutoComplete(report, snapshot);
+    const deferred = isDigestDeferred(report, snapshot);
+    const locked = portalDone || digestDone || deferred || notRequired;
+    const possible = !manual && !notRequired && !portalDone ? notRequiredMatch(report, snapshot, preferences) : null;
+    const checkLabel = portalDone ? "スタログ上で完了" : manual ? "手動完了を解除" : notRequired ? "対応不要のため完了操作はできません" : "手動完了にする";
+    const stateLabel = portalDone ? "完了" : manual ? "手動完了" : notRequired ? "対応不要" : "未完了";
+    return `<button class="studylog-inline-check${manual ? " is-manual" : portalDone ? " is-portal-done" : ""}" type="button" data-inline-manual="${escapeHtml(key)}" aria-pressed="${manual || portalDone}" title="${checkLabel}"${locked && !manual ? " disabled" : ""}>✓</button><span class="studylog-inline-state" data-state="${portalDone ? "done" : manual ? "manual" : notRequired ? "not-required" : "pending"}">${stateLabel}</span>${possible ? `<span class="studylog-inline-possible" title="${escapeHtml(possible.reason)}">対応不要の可能性</span>` : ""}${!portalDone && !digestDone && !deferred ? `<button class="studylog-inline-not-required${notRequired ? " is-active" : ""}" type="button" data-inline-not-required="${escapeHtml(key)}">${notRequired ? "対応不要を解除" : "対応不要"}</button>` : ""}`;
+  }
+
+  function renderInlineTaskControls(snapshot, preferences) {
+    const root = document.querySelector("#div-class-contents");
+    const context = readClassContext();
+    if (!root || !context.classId || !context.directoryId) return;
+    array(snapshot.reports)
+      .filter((report) => String(report.classId) === String(context.classId) && String(report.directoryId) === String(context.directoryId))
+      .forEach((report) => {
+        const key = reportKey(report);
+        const markup = inlineTaskMarkup(report, snapshot, preferences);
+        let controls = [...root.querySelectorAll(".studylog-inline-task-control")].find((item) => item.dataset.inlineTaskKey === key);
+        if (!controls) {
+          const host = inlineReportHost(root, report);
+          if (!host) return;
+          controls = document.createElement("span");
+          controls.className = "studylog-inline-task-control";
+          controls.dataset.inlineTaskKey = key;
+          host.append(controls);
+        }
+        if (controls.innerHTML !== markup) controls.innerHTML = markup;
+      });
+  }
+
+  async function renderCompanion(root, suppliedSnapshot, suppliedPreferences) {
     if (!root || isQuizScreen()) return;
-    const [snapshot, preferences] = await Promise.all([readSnapshot(), readPreferences()]);
+    const [snapshot, preferences] = suppliedSnapshot && suppliedPreferences
+      ? [suppliedSnapshot, suppliedPreferences]
+      : await Promise.all([readSnapshot(), readPreferences()]);
     const scene = pageScene();
-    root.querySelector("#stalog-bridge-toggle").innerHTML = `<span class="stalog-context-dot">S</span><span>${escapeHtml(compactLabel(scene, snapshot, preferences))}</span>`;
-    root.querySelector("#stalog-context-body").innerHTML = sceneContent(scene, snapshot, preferences);
-    root.querySelector("#stalog-context-title").textContent = sceneTitle(scene);
+    root.querySelector("#studylog-bridge-toggle").innerHTML = `<span class="studylog-context-dot">S</span><span>${escapeHtml(compactLabel(scene, snapshot, preferences))}</span>`;
+    root.querySelector("#studylog-context-body").innerHTML = sceneContent(scene, snapshot, preferences);
+    root.querySelector("#studylog-context-title").textContent = sceneTitle(scene);
     root.querySelector('[data-action="dashboard"][data-footer]').dataset.view = dashboardView(scene);
     const updated = snapshot.collectedAt ? new Date(snapshot.collectedAt).toLocaleString("ja-JP") : "未取得";
-    root.querySelector("#stalog-bridge-status").textContent = `最終取得: ${updated}`;
+    root.querySelector("#studylog-bridge-status").textContent = `最終取得: ${updated}`;
     markUnitExamTimetable(snapshot);
+    renderInlineTaskControls(snapshot, preferences);
   }
 
   let automaticCollectionPromise;
   let automaticCollectionRetryAt = 0;
+  let forcedReportRefreshQueued = false;
+  let statusRefreshTimer;
 
   function automaticCollectionAllowed() {
     return !isQuizScreen() && location.hostname === "portal.iwasaki.ac.jp" && document.visibilityState !== "hidden";
   }
 
-  async function automaticCollectionDue() {
-    const stored = await chrome.storage.local.get([STORAGE_KEY, AUTO_COLLECT_STATE_KEY]);
-    const snapshot = stored[STORAGE_KEY];
-    const state = stored[AUTO_COLLECT_STATE_KEY] || {};
-    const startedAt = Date.parse(state.startedAt || "") || 0;
-    const completedAt = Date.parse(state.completedAt || "") || 0;
-    if (startedAt > completedAt && Date.now() - startedAt < AUTO_COLLECT_RETRY_MS) return false;
-    const latest = Math.max(Date.parse(snapshot?.collectedAt || "") || 0, completedAt);
-    return Date.now() - latest >= AUTO_COLLECT_INTERVAL_MS;
+  function pendingCountForYear(snapshot, academicYear, fallbackYear) {
+    return itemsForYear(snapshot?.reports, academicYear, fallbackYear)
+      .filter((report) => /未完了|未提出|未回答|未受験|未実施/.test(report?.status || ""))
+      .length;
   }
 
-  async function runAutomaticCollection() {
+  function orderedClassIds(snapshot, academicYear, fallbackYear) {
+    const currentClassId = readClassContext().classId;
+    return [...new Set([
+      currentClassId,
+      ...itemsForYear(snapshot?.courses, academicYear, fallbackYear).map((course) => course.classId),
+      ...itemsForYear(snapshot?.reports, academicYear, fallbackYear).map((report) => report.classId)
+    ].filter(Boolean))];
+  }
+
+  async function automaticCollectionDue(forceReports = false) {
+    const stored = await chrome.storage.local.get([STORAGE_KEY, AUTO_COLLECT_STATE_KEY]);
+    const snapshot = stored[STORAGE_KEY] || await readSnapshot();
+    const state = { ...(stored[AUTO_COLLECT_STATE_KEY] || {}), years: stored[AUTO_COLLECT_STATE_KEY]?.years || {} };
+    const startedAt = Date.parse(state.startedAt || "") || 0;
+    const completedAt = Date.parse(state.completedAt || "") || 0;
+    if (startedAt > completedAt && Date.now() - startedAt < AUTO_COLLECT_RETRY_MS) return null;
+    const previousYear = Number(snapshot.academicYear || readAcademicYear());
+    const academicYear = readAcademicYear(previousYear);
+    const storedYearState = state.years[academicYear] || {};
+    const legacyCollectedAt = Number(academicYear) === previousYear ? snapshot.collectedAt : undefined;
+    const yearState = {
+      ...storedYearState,
+      reportStatusCollectedAt: storedYearState.reportStatusCollectedAt || snapshot.freshnessByYear?.[academicYear]?.reportStatusCollectedAt || legacyCollectedAt,
+      subjectStatusCollectedAt: storedYearState.subjectStatusCollectedAt || snapshot.freshnessByYear?.[academicYear]?.subjectStatusCollectedAt || legacyCollectedAt,
+      directoriesByClass: storedYearState.directoriesByClass || Object.fromEntries(orderedClassIds(snapshot, academicYear, previousYear).map((classId) => [classId, snapshot.lessonListCollectedAt || legacyCollectedAt]).filter(([, value]) => value))
+    };
+    const classIds = orderedClassIds(snapshot, academicYear, previousYear);
+    const plan = StudylogAutoSyncRules.plan({
+      academicYear,
+      pendingCount: pendingCountForYear(snapshot, academicYear, previousYear),
+      classIds,
+      yearState,
+      forceReports
+    });
+    return plan.hasWork ? { snapshot, state, yearState, previousYear, academicYear, plan } : null;
+  }
+
+  async function acquireAutomaticCollectionLease() {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: "studylog-bridge:auto-collection-acquire", leaseMs: AUTO_COLLECT_RETRY_MS });
+      if (response && typeof response.granted === "boolean") return response;
+    } catch {
+      // テスト環境や旧バックグラウンドでは、このタブ内の排他制御だけを使う。
+    }
+    return { granted: true, leaseId: `local-${Date.now()}` };
+  }
+
+  function releaseAutomaticCollectionLease(leaseId) {
+    if (!leaseId || String(leaseId).startsWith("local-")) return;
+    const result = chrome.runtime.sendMessage({ type: "studylog-bridge:auto-collection-release", leaseId });
+    result?.catch?.(() => {});
+  }
+
+  async function collectAutomatically(context) {
+    const { snapshot, state, yearState, previousYear, academicYear, plan } = context;
+    const changes = {};
+    const errors = [];
+    let succeeded = false;
+    state.startedAt = new Date().toISOString();
+    stampLegacyAcademicYear(snapshot, previousYear);
+
+    if (plan.reportsDue) {
+      try {
+        const collectedAt = new Date().toISOString();
+        const reports = parseReportStatus(await fetchText("/portal/lmsinc/myReportStatus.php"));
+        snapshot.reports = replaceYearItems(snapshot.reports, reports, academicYear, previousYear, (item) => `${item.academicYear}:${reportKey(item)}`);
+        yearState.reportStatusCollectedAt = collectedAt;
+        changes.reportStatusCollectedAt = collectedAt;
+        sessionStorage.removeItem(STATUS_REFRESH_SESSION_KEY);
+        succeeded = true;
+      } catch (error) { errors.push(error); }
+    }
+
+    if (plan.subjectsDue) {
+      try {
+        const collectedAt = new Date().toISOString();
+        const courses = parseSubjectStatus(await fetchText("/portal/lmsinc/mySubjectStatus.php"));
+        snapshot.courses = replaceYearItems(snapshot.courses, courses, academicYear, previousYear, (item) => `${item.academicYear}:${item.classId}`);
+        yearState.subjectStatusCollectedAt = collectedAt;
+        changes.subjectStatusCollectedAt = collectedAt;
+        succeeded = true;
+      } catch (error) { errors.push(error); }
+    }
+
+    if (plan.directoryClassId) {
+      try {
+        const collectedAt = new Date().toISOString();
+        const directories = await fetchCourseDirectories(plan.directoryClassId, academicYear);
+        const lessonDates = await fetchLessonDates(plan.directoryClassId, academicYear).catch(() => []);
+        const merged = mergeBy(directories, lessonDates, (entry) => `${entry.classId}:${entry.directoryId}`);
+        snapshot.directories = mergeBy(snapshot.directories, merged.map((item) => ({ ...item, academicYear })), (item) => `${item.classId}:${item.directoryId}`);
+        yearState.directoriesByClass = { ...(yearState.directoriesByClass || {}), [plan.directoryClassId]: collectedAt };
+        changes.lastDirectoryCollectedAt = collectedAt;
+        changes.lastDirectoryClassId = plan.directoryClassId;
+        succeeded = true;
+      } catch (error) { errors.push(error); }
+    }
+
+    if (succeeded) {
+      const completedAt = new Date().toISOString();
+      snapshot.schemaVersion = 1;
+      snapshot.academicYear = academicYear;
+      snapshot.sourceOrigin = location.origin;
+      snapshot.collectedAt = completedAt;
+      mergeCurrentPage(snapshot);
+      markSnapshotFreshness(snapshot, academicYear, changes);
+      state.years[academicYear] = yearState;
+      state.completedAt = completedAt;
+      if (errors.length) state.lastError = errors[0].message;
+      else delete state.lastError;
+      await chrome.storage.local.set({ [STORAGE_KEY]: snapshot, [AUTO_COLLECT_STATE_KEY]: state });
+    }
+    if (errors.length) throw errors[0];
+    return snapshot;
+  }
+
+  async function runAutomaticCollection(options = {}) {
+    const forceReports = options?.forceReports === true;
+    if (forceReports && automaticCollectionPromise) forcedReportRefreshQueued = true;
     if (!automaticCollectionAllowed() || automaticCollectionPromise || Date.now() < automaticCollectionRetryAt) return automaticCollectionPromise;
-    if (!await automaticCollectionDue()) return null;
+    const context = await automaticCollectionDue(forceReports);
+    if (!context) return null;
+    const lease = await acquireAutomaticCollectionLease();
+    if (!lease.granted) return null;
     const root = document.getElementById(ROOT_ID);
     automaticCollectionPromise = (async () => {
-      if (root) root.querySelector("#stalog-bridge-status").textContent = "自動取得中…";
+      if (root) root.querySelector("#studylog-bridge-status").textContent = "自動取得中…";
       try {
-        await chrome.storage.local.set({ [AUTO_COLLECT_STATE_KEY]: { startedAt: new Date().toISOString() } });
-        const snapshot = await collect();
-        await chrome.storage.local.set({ [AUTO_COLLECT_STATE_KEY]: { completedAt: new Date().toISOString() } });
+        const snapshot = await collectAutomatically(context);
         await renderCompanion(root);
         return snapshot;
       } catch (error) {
         automaticCollectionRetryAt = Date.now() + AUTO_COLLECT_RETRY_MS;
         window.setTimeout(runAutomaticCollection, AUTO_COLLECT_RETRY_MS);
-        if (root) root.querySelector("#stalog-bridge-status").textContent = `自動取得を再試行します: ${error.message}`;
+        if (root) root.querySelector("#studylog-bridge-status").textContent = `自動取得を再試行します: ${error.message}`;
         return null;
       } finally {
         automaticCollectionPromise = null;
+        releaseAutomaticCollectionLease(lease.leaseId);
+        if (forcedReportRefreshQueued) {
+          forcedReportRefreshQueued = false;
+          window.setTimeout(() => runAutomaticCollection({ forceReports: true }), STATUS_REFRESH_DELAY_MS);
+        }
       }
     })();
     return automaticCollectionPromise;
   }
 
+  function queueStatusRefresh(delay = STATUS_REFRESH_DELAY_MS) {
+    try { sessionStorage.setItem(STATUS_REFRESH_SESSION_KEY, String(Date.now())); } catch { /* ページ内タイマーだけで継続する。 */ }
+    clearTimeout(statusRefreshTimer);
+    statusRefreshTimer = window.setTimeout(() => runAutomaticCollection({ forceReports: true }), delay);
+  }
+
+  function refreshStatusImmediatelyAndLater() {
+    try { sessionStorage.setItem(STATUS_REFRESH_SESSION_KEY, String(Date.now())); } catch { /* ページ遷移後の再開ができない場合でも、このページでは更新する。 */ }
+    clearTimeout(statusRefreshTimer);
+    runAutomaticCollection({ forceReports: true });
+    statusRefreshTimer = window.setTimeout(() => runAutomaticCollection({ forceReports: true }), STATUS_REFRESH_DELAY_MS);
+  }
+
+  function resumePendingStatusRefresh() {
+    try {
+      const requestedAt = Number(sessionStorage.getItem(STATUS_REFRESH_SESSION_KEY) || 0);
+      if (requestedAt && Date.now() - requestedAt < 10 * 60 * 1000) refreshStatusImmediatelyAndLater();
+      else sessionStorage.removeItem(STATUS_REFRESH_SESSION_KEY);
+    } catch {
+      // セッション領域が使えない場合は通常の30分取得で補う。
+    }
+  }
+
   async function captureCurrentPageAutomatically() {
     if (isQuizScreen()) return;
-    const snapshot = await readSnapshot();
+    const snapshot = prepareSnapshotForCurrentYear(await readSnapshot());
     mergeCurrentPage(snapshot);
     if (!snapshot.collectedAt) return;
     await saveSnapshot(snapshot);
@@ -902,22 +1420,22 @@
     const root = document.createElement("div");
     root.id = ROOT_ID;
     root.innerHTML = `
-      <div id="stalog-bridge-panel" aria-live="polite">
-        <div class="stalog-context-head"><div><span>STALOG</span><h2 id="stalog-context-title">学習状況</h2></div><button type="button" data-action="close" aria-label="閉じる">×</button></div>
-        <div id="stalog-context-body"></div>
-        <div class="stalog-bridge-actions">
-          <button class="stalog-bridge-primary" type="button" data-action="collect">取得して保存</button>
+      <div id="studylog-bridge-panel" aria-live="polite">
+        <div class="studylog-context-head"><div><span>STUDYLOG</span><h2 id="studylog-context-title">学習状況</h2></div><button type="button" data-action="close" aria-label="閉じる">×</button></div>
+        <div id="studylog-context-body"></div>
+        <div class="studylog-bridge-actions">
+          <button class="studylog-bridge-primary" type="button" data-action="collect">取得して保存</button>
           <button type="button" data-action="dashboard" data-footer>ダッシュボード</button>
           <button type="button" data-action="export">JSON</button>
         </div>
-        <p id="stalog-bridge-status"></p>
+        <p id="studylog-bridge-status"></p>
       </div>
-      <button id="stalog-bridge-toggle" type="button"><span class="stalog-context-dot">S</span><span>読み込み中…</span></button>`;
+      <button id="studylog-bridge-toggle" type="button"><span class="studylog-context-dot">S</span><span>読み込み中…</span></button>`;
     document.documentElement.append(root);
     root.addEventListener("click", async (event) => {
       const action = event.target.closest("[data-action]")?.dataset.action;
-      const panel = root.querySelector("#stalog-bridge-panel");
-      if (event.target.closest("#stalog-bridge-toggle")) {
+      const panel = root.querySelector("#studylog-bridge-panel");
+      if (event.target.closest("#studylog-bridge-toggle")) {
         panel.dataset.open = panel.dataset.open === "true" ? "false" : "true";
         if (panel.dataset.open === "true") await renderCompanion(root);
         return;
@@ -926,38 +1444,34 @@
       if (action === "collect") {
         const button = event.target.closest("button");
         button.disabled = true;
-        root.querySelector("#stalog-bridge-status").textContent = "取得中…";
+        root.querySelector("#studylog-bridge-status").textContent = "取得中…";
         try {
           const snapshot = automaticCollectionPromise ? await automaticCollectionPromise : await collect();
           if (!snapshot) throw new Error("取得を完了できませんでした");
-          await chrome.storage.local.set({ [AUTO_COLLECT_STATE_KEY]: { completedAt: new Date().toISOString() } });
           await renderCompanion(root);
         }
-        catch (error) { root.querySelector("#stalog-bridge-status").textContent = `取得できませんでした: ${error.message}`; }
+        catch (error) { root.querySelector("#studylog-bridge-status").textContent = `取得できませんでした: ${error.message}`; }
         finally { button.disabled = false; }
         return;
       }
       if (action === "export") {
         const snapshot = await readSnapshot();
-        if (!snapshot.collectedAt) { root.querySelector("#stalog-bridge-status").textContent = "先に取得してください。"; return; }
+        if (!snapshot.collectedAt) { root.querySelector("#studylog-bridge-status").textContent = "先に取得してください。"; return; }
         exportSnapshot(snapshot);
-        root.querySelector("#stalog-bridge-status").textContent = "JSONを書き出しました。";
+        root.querySelector("#studylog-bridge-status").textContent = "JSONを書き出しました。";
         return;
       }
       if (action === "dashboard") {
-        chrome.runtime.sendMessage({ type: "stalog-bridge:open-dashboard", view: event.target.closest("[data-view]")?.dataset.view || dashboardView(pageScene()) });
+        chrome.runtime.sendMessage({ type: "studylog-bridge:open-dashboard", view: event.target.closest("[data-view]")?.dataset.view || dashboardView(pageScene()) });
         return;
       }
       const manual = event.target.closest("[data-context-manual]");
       if (manual) {
-        const preferences = await readPreferences();
-        const completed = new Set(preferences.manualCompleted);
-        if (completed.has(manual.dataset.contextManual)) completed.delete(manual.dataset.contextManual);
-        else completed.add(manual.dataset.contextManual);
-        preferences.manualCompleted = [...completed];
-        await savePreferences(preferences);
-        await renderCompanion(root);
+        await updateTaskDisposition(manual.dataset.contextManual, "manual");
+        return;
       }
+      const notRequired = event.target.closest("[data-context-not-required]");
+      if (notRequired) await updateTaskDisposition(notRequired.dataset.contextNotRequired, "not-required");
     });
     renderCompanion(root);
   }
@@ -965,18 +1479,66 @@
   let pageHookInjected = false;
   function injectPageHook() {
     if (pageHookInjected) return;
+    const host = document.documentElement || document.head;
+    if (!host) {
+      document.addEventListener("readystatechange", injectPageHook, { once: true });
+      return;
+    }
     pageHookInjected = true;
     const script = document.createElement("script");
     script.src = chrome.runtime.getURL("page-hook.js");
-    script.dataset.stalogBridgeHook = "true";
-    (document.documentElement || document.head).append(script);
+    script.dataset.studylogBridgeHook = "true";
+    host.append(script);
     script.remove();
   }
 
-  window.addEventListener("stalog-bridge:schedule-request", async (event) => {
+  window.addEventListener("studylog-bridge:quiz-traffic", (event) => recordQuizTrace(event.detail));
+  window.addEventListener("studylog-bridge:learning-write", (event) => {
+    if (event.detail?.phase === "submitted") {
+      refreshStatusImmediatelyAndLater();
+      return;
+    }
+    if (event.detail?.phase === "response" && Number(event.detail?.status) >= 200 && Number(event.detail?.status) < 400) queueStatusRefresh();
+  });
+  window.addEventListener("studylog-bridge:quiz-save-result", (event) => {
+    if (String(event.detail?.requestId || "") === quizAutoSaveRequestId) {
+      clearTimeout(quizAutoSaveTimeout);
+      quizAutoSaveInFlight = false;
+      quizAutoSaveRequestId = "";
+      recordQuizTrace({
+        phase: "signal",
+        transport: "autosave",
+        signal: event.detail?.ok ? "saved" : "failed",
+        status: event.detail?.status,
+        control: event.detail?.pageNumber ? `page=${event.detail.pageNumber}` : undefined
+      });
+      if (quizAutoSaveQueued) scheduleQuizAutoSave(250);
+      return;
+    }
+    const root = document.getElementById(QUIZ_INSPECTOR_ROOT_ID);
+    const button = root?.querySelector('[data-quiz-action="save"]');
+    const message = root?.querySelector("#studylog-quiz-inspector-message");
+    if (!button || button.dataset.requestId !== String(event.detail?.requestId || "")) return;
+    button.disabled = false;
+    delete button.dataset.requestId;
+    if (event.detail?.ok) {
+      message.textContent = `ページ${event.detail.pageNumber}を保存しました（XHR ${event.detail.status}・フォーム確定済み）。`;
+    } else {
+      message.textContent = `保存要求に失敗しました: ${event.detail?.error || `HTTP ${event.detail?.status || 0}`}`;
+    }
+  });
+  try {
+    const storedQuizTrace = JSON.parse(sessionStorage.getItem(QUIZ_TRACE_SESSION_KEY) || "[]");
+    quizTrace.push(...array(storedQuizTrace).slice(-QUIZ_TRACE_LIMIT).map(normalizeTrace));
+  } catch {
+    // 破損した旧ログは読み込まない。
+  }
+  injectPageHook();
+
+  window.addEventListener("studylog-bridge:schedule-request", async (event) => {
     const startDate = readScheduleStartDate(event.detail?.url);
     if (!startDate) return;
-    const snapshot = await readSnapshot();
+    const snapshot = prepareSnapshotForCurrentYear(await readSnapshot());
     snapshot.timetableWeekStart = { startDate, observedAt: new Date().toISOString() };
     if (pageKind() === "top") {
       snapshot.timetableSlots = readNormalizedTimetable(startDate);
@@ -984,39 +1546,45 @@
     await saveSnapshot(snapshot);
   });
 
-  window.addEventListener("stalog-bridge:location-change", () => syncPageMode(true));
+  window.addEventListener("studylog-bridge:location-change", () => syncPageMode(true));
 
   let observerTimer;
   let lastContextLocation = "";
   let lastQuizMode;
 
   function notifyPageMode(quiz) {
-    const result = chrome.runtime.sendMessage({ type: "stalog-bridge:page-mode", quiz });
+    const result = chrome.runtime.sendMessage({ type: "studylog-bridge:page-mode", quiz });
     result?.catch?.(() => {});
   }
 
   function syncPageMode(forceRender = false) {
     const quiz = isQuizScreen();
+    const returnedFromQuiz = lastQuizMode === true && quiz === false;
     if (quiz !== lastQuizMode) {
       notifyPageMode(quiz);
       lastQuizMode = quiz;
     }
     if (quiz) {
       document.getElementById(ROOT_ID)?.remove();
+      if (isQuizDebugMode()) installQuizInspector();
+      else document.getElementById(QUIZ_INSPECTOR_ROOT_ID)?.remove();
       lastContextLocation = location.href;
       return;
     }
 
-    injectPageHook();
+    clearTimeout(quizAutoSaveTimer);
+    quizAutoSaveQueued = false;
+    document.getElementById(QUIZ_INSPECTOR_ROOT_ID)?.remove();
     const root = document.getElementById(ROOT_ID);
     if (!root) installUi();
     else if (forceRender || lastContextLocation !== location.href) renderCompanion(root);
+    if (returnedFromQuiz) refreshStatusImmediatelyAndLater();
     lastContextLocation = location.href;
   }
 
   function observeCurrentPage() {
     const observer = new MutationObserver((mutations) => {
-      const outsideCompanion = mutations.some((mutation) => !mutation.target.closest?.(`#${ROOT_ID}`));
+      const outsideCompanion = mutations.some((mutation) => !mutation.target.closest?.(`#${ROOT_ID}, #${QUIZ_INSPECTOR_ROOT_ID}`));
       if (!outsideCompanion) return;
       if (isQuizScreen()) {
         syncPageMode(false);
@@ -1026,7 +1594,7 @@
       observerTimer = setTimeout(async () => {
         syncPageMode(true);
         if (isQuizScreen()) return;
-        const snapshot = await readSnapshot();
+        const snapshot = prepareSnapshotForCurrentYear(await readSnapshot());
         mergeCurrentPage(snapshot);
         if (snapshot.collectedAt) {
           await saveSnapshot(snapshot);
@@ -1038,22 +1606,73 @@
   }
 
   chrome.runtime.onMessage.addListener((message) => {
-    if (message?.type === "stalog-bridge:toggle" && !isQuizScreen()) document.querySelector("#stalog-bridge-toggle")?.click();
+    if (message?.type !== "studylog-bridge:toggle") return;
+    if (isQuizScreen()) {
+      if (isQuizDebugMode()) document.querySelector("#studylog-quiz-inspector-toggle")?.click();
+      return;
+    }
+    document.querySelector("#studylog-bridge-toggle")?.click();
+  });
+
+  document.addEventListener("click", async (event) => {
+    if (isQuizScreen()) return;
+    const manual = event.target.closest?.("[data-inline-manual]");
+    if (manual) {
+      event.preventDefault();
+      event.stopPropagation();
+      await updateTaskDisposition(manual.dataset.inlineManual, "manual");
+      return;
+    }
+    const notRequired = event.target.closest?.("[data-inline-not-required]");
+    if (notRequired) {
+      event.preventDefault();
+      event.stopPropagation();
+      await updateTaskDisposition(notRequired.dataset.inlineNotRequired, "not-required");
+    }
+  });
+
+  document.addEventListener("change", (event) => {
+    if (isQuizScreen() || !event.target.matches?.("#select-year, [name='year']")) return;
+    queueStatusRefresh(1000);
   });
 
   document.addEventListener("click", (event) => {
+    if (!isQuizScreen()) return;
+    const control = controlMetadata(event.target);
+    if (control) recordQuizTrace({ phase: "signal", transport: "ui", signal: "click", control });
+  }, true);
+
+  document.addEventListener("change", (event) => {
+    if (!isQuizScreen() || event.target.closest?.(`#${QUIZ_INSPECTOR_ROOT_ID}`)) return;
+    const target = event.target;
+    const field = [target.tagName?.toLowerCase(), target.id ? `#${target.id}` : "", target.name ? `[name=${target.name}]` : "", target.type ? `[type=${target.type}]` : ""].join("");
+    recordQuizTrace({ phase: "signal", transport: "ui", signal: "change", control: field });
+    if (isQuizAnswerControl(target)) scheduleQuizAutoSave(250);
+  }, true);
+
+  document.addEventListener("input", (event) => {
+    if (!isQuizScreen() || event.target.closest?.(`#${QUIZ_INSPECTOR_ROOT_ID}`) || !isQuizAnswerControl(event.target)) return;
+    const type = String(event.target.getAttribute("type") || "").toLowerCase();
+    if (!["radio", "checkbox", "select-one", "select-multiple"].includes(type)) {
+      // 記述中は送らず、カーソルを置いたままの場合だけ長時間の無操作後に保険保存する。
+      scheduleQuizAutoSave(QUIZ_TEXT_IDLE_SAVE_DELAY_MS);
+    }
+  }, true);
+
+  document.addEventListener("click", (event) => {
     const root = document.getElementById(ROOT_ID);
-    const panel = root?.querySelector("#stalog-bridge-panel");
+    const panel = root?.querySelector("#studylog-bridge-panel");
     if (panel?.dataset.open === "true" && !event.composedPath().includes(root)) panel.dataset.open = "false";
   });
 
   const initialize = () => {
     syncPageMode(true);
     observeCurrentPage();
+    resumePendingStatusRefresh();
     window.setTimeout(() => {
       captureCurrentPageAutomatically().catch(() => null).finally(runAutomaticCollection);
     }, 500);
-    window.setInterval(runAutomaticCollection, AUTO_COLLECT_INTERVAL_MS);
+    window.setInterval(() => runAutomaticCollection(), AUTO_COLLECT_INTERVAL_MS);
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") runAutomaticCollection();
     });

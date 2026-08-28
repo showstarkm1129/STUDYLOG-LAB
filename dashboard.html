@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
-    <title>Stalog Dashboard</title>
+    <title>Studylog Dashboard</title>
     <link rel="stylesheet" href="dashboard.css">
   </head>
   <body>
@@ -13,17 +13,17 @@
         <div class="brand">
           <span class="brand-mark" aria-hidden="true">S</span>
           <div>
-            <strong>Stalog</strong>
+            <strong>Studylog</strong>
             <span>student dashboard</span>
           </div>
         </div>
 
-        <nav class="main-nav" id="main-nav">
-          <button class="nav-item is-active" data-view="home" type="button"><span>⌂</span>ホーム</button>
-          <button class="nav-item" data-view="tasks" type="button"><span>✓</span>課題</button>
-          <button class="nav-item" data-view="attendance" type="button"><span>◔</span>出席</button>
-          <button class="nav-item" data-view="courses" type="button"><span>□</span>科目</button>
-        </nav>
+        <nav class="main-nav" id="main-nav" aria-label="ページ"></nav>
+
+        <div class="page-nav-actions">
+          <button class="quiet-button full-width" id="organize-pages" type="button">ページを整理</button>
+          <button class="secondary-button full-width" id="add-custom-page" type="button">＋ ページを追加</button>
+        </div>
 
         <div class="sidebar-foot">
           <div class="privacy-note"><span aria-hidden="true">●</span> データはこの端末内だけ</div>
@@ -56,7 +56,10 @@
         </header>
         <div id="data-summary" class="data-summary"></div>
         <section class="data-quality-dialog">
-          <h3>データ品質</h3>
+          <div class="feature-title-row">
+            <h3>データ品質</h3>
+            <div id="data-quality-help"></div>
+          </div>
           <p>不足データと、影響する機能を確認できます。</p>
           <div id="data-quality"></div>
         </section>
@@ -81,6 +84,58 @@
       </div>
     </dialog>
 
+    <dialog id="completion-settings-dialog" class="modal wide-modal">
+      <div class="modal-card">
+        <header>
+          <div>
+            <p class="eyebrow">COMPLETION SCOPE</p>
+            <h2>課題の整理率：判定と対象科目</h2>
+          </div>
+          <button class="icon-button" data-close-dialog="completion-settings-dialog" aria-label="閉じる">×</button>
+        </header>
+        <div id="completion-settings-dialog-body"></div>
+      </div>
+    </dialog>
+
+    <dialog id="page-settings-dialog" class="modal">
+      <form id="page-settings-form" class="modal-card">
+        <header>
+          <div>
+            <p class="eyebrow">CUSTOM PAGE</p>
+            <h2 id="page-settings-title">ページを追加</h2>
+          </div>
+          <button class="icon-button" data-close-dialog="page-settings-dialog" type="button" aria-label="閉じる">×</button>
+        </header>
+        <input id="page-settings-id" type="hidden">
+        <div class="page-settings-fields">
+          <label><span>ページ名</span><input id="page-settings-name" type="text" maxlength="24" placeholder="今日やること" required></label>
+        </div>
+        <fieldset class="page-icon-field">
+          <legend>アイコン</legend>
+          <input id="page-settings-icon" type="hidden" value="dashboard">
+          <div id="page-icon-picker" class="icon-picker" role="radiogroup" aria-label="ページのアイコン"></div>
+        </fieldset>
+        <p class="help-text">ページ名は24文字以内です。アイコンは一覧から1つ選択してください。</p>
+        <div class="modal-actions page-settings-actions">
+          <button class="quiet-button page-delete-button" id="delete-custom-page" type="button" hidden>ページを削除</button>
+          <button class="primary-button" type="submit">保存</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="card-catalog-dialog" class="modal wide-modal">
+      <div class="modal-card">
+        <header>
+          <div>
+            <p class="eyebrow">CARD CATALOG</p>
+            <h2>カードを追加</h2>
+          </div>
+          <button class="icon-button" data-close-dialog="card-catalog-dialog" type="button" aria-label="閉じる">×</button>
+        </header>
+        <div id="card-catalog-list" class="widget-catalog"></div>
+      </div>
+    </dialog>
+
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
 
     <template id="empty-state-template">
@@ -93,7 +148,11 @@
       </div>
     </template>
 
+    <script src="attendance-rules.js"></script>
+    <script src="dashboard-icons.js"></script>
+    <script src="dashboard-layout.js"></script>
     <script src="digest-rules.js"></script>
+    <script src="task-rules.js"></script>
     <script src="dashboard.js"></script>
   </body>
 </html>
