@@ -209,6 +209,18 @@ let importedSnapshot;
     const dateSelect = page.locator("#studylog-course-navigation-date");
     assert.equal(await dateSelect.isVisible(), true, "ambiguous dates can be selected explicitly");
     assert.equal(await previous.isVisible(), false, "do not silently substitute today");
+    await page.addStyleTag({ content: ':root { color-scheme: dark; } select, option { color: white; background: white; }' });
+    const dateChoices = await dateSelect.locator('option[value]:not([value=""])').evaluateAll(options => options.map(option => {
+      const style = getComputedStyle(option);
+      return { value: option.value, label: option.textContent, color: style.color, background: style.backgroundColor };
+    }));
+    assert.deepEqual(dateChoices.map(option => option.value), ["2026-09-28", "2026-09-29"]);
+    for (const option of dateChoices) {
+      assert.match(option.label, /9\/2[89]/, "date choices have readable labels");
+      assert.equal(option.color, "rgb(21, 35, 29)", "portal styles must not hide date labels");
+      assert.equal(option.background, "rgb(255, 255, 255)");
+    }
+    assert.equal(await dateSelect.evaluate(element => getComputedStyle(element).colorScheme), "light");
     await dateSelect.selectOption("2026-09-29");
     await page.waitForFunction(() => document.querySelector("#studylog-previous-course")?.getAttribute("href")?.includes("10943"));
     const regressionPanel = await page.locator("#studylog-bridge-panel").boundingBox();

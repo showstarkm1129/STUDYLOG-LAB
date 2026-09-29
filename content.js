@@ -9,6 +9,13 @@
   const STATUS_REFRESH_DELAY_MS = 15 * 1000;
   const STATUS_REFRESH_SESSION_KEY = "studylogBridgeStatusRefreshV1";
   const ROOT_ID = "studylog-bridge-root";
+  const QUICK_MEMO_ROOT_ID = "studylog-quick-memo";
+  const QUICK_MEMO_PREFIX = "studylogQuickMemoV1:";
+  const WEEKDAY_NAMES = ["日", "月", "火", "水", "木", "金", "土"];
+  const quickMemoTexts = new Map();
+  let quickMemoEditor = null;
+  let quickMemoOpenRequest = 0;
+  let pendingTimetableRequest = null;
   const QUIZ_INSPECTOR_ROOT_ID = "studylog-quiz-inspector-root";
   const QUIZ_TRACE_SESSION_KEY = "studylogQuizTraceV1";
   const QUIZ_TRACE_LIMIT = 250;
@@ -31,7 +38,7 @@
   const uniqueBy = (items, key) => [...new Map(items.map((item) => [key(item), item])).values()];
   const mergeBy = (existing, incoming, key) => {
     const merged = new Map(existing.map((item) => [key(item), item]));
-    incoming.forEach((item) => merged.set(key(item), { ...merged.get(key(item)), ...item }));
+    incoming.forEach((item) => merged.set(key(item), { ...merged.get(key(item)), ...Object.fromEntries(Object.entries(item).filter(([, value]) => value !== undefined)) }));
     return [...merged.values()];
   };
   const numberOrUndefined = (value) => {
@@ -74,7 +81,7 @@
     try {
       const requestUrl = new URL(url, location.origin);
       const value = requestUrl.searchParams.get("startDate") || requestUrl.searchParams.get("startdate");
-      return value && /^20\d{2}-\d{2}-\d{2}$/.test(value) ? value : undefined;
+      return StudylogDateRules.validIsoDate(value) ? value : undefined;
     } catch {
       return undefined;
     }
@@ -101,19 +108,7 @@
   }
 
   function dateFromLessonText(value, academicYear) {
-    const normalizedValue = String(value || "").normalize("NFKC");
-    const full = normalizedValue.match(/(20\d{2})\s*[年\/.-]\s*(0?[1-9]|1[0-2])\s*[月\/.-]\s*(0?[1-9]|[12]\d|3[01])(?:日)?/);
-    const short = normalizedValue.match(/(?:^|[^0-9])(\d{1,2})\s*[月\/.]\s*(\d{1,2})(?:日)?/);
-    const compact = normalizedValue.match(/(?:^|[_\s(（])(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(?=$|[_\s)）])/);
-    const match = full || short || compact;
-    if (!match) return undefined;
-    const month = Number(match[full ? 2 : 1]);
-    const day = Number(match[full ? 3 : 2]);
-    if (month < 1 || month > 12 || day < 1 || day > 31) return undefined;
-    const year = full ? Number(match[1]) : academicYear + (month < 4 ? 1 : 0);
-    const date = new Date(year, month - 1, day);
-    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return undefined;
-    return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    return StudylogDateRules.fromText(value, { academicYear, compact: true });
   }
 
   function parseDirectoriesFromDocument(doc, classId, academicYear, source) {
@@ -248,17 +243,8 @@
     return grid;
   }
 
-  function dateFromLabel(value) {
-    const full = value.match(/(20\d{2})\s*[\/年.\-]\s*(0?[1-9]|1[0-2])\s*[\/月.\-]\s*(0?[1-9]|[12]\d|3[01])(?:日)?/);
-    const short = value.match(/(?:^|\s)(\d{1,2})\s*[\/.月]\s*(\d{1,2})/);
-    const match = full || short;
-    if (!match) return undefined;
-    const year = full ? Number(match[1]) : new Date().getFullYear();
-    const month = Number(match[full ? 2 : 1]);
-    const day = Number(match[full ? 3 : 2]);
-    const parsed = new Date(year, month - 1, day);
-    if (Number.isNaN(parsed.valueOf())) return undefined;
-    return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  function dateFromLabel(value, referenceDate) {
+    return StudylogDateRules.fromText(value, { academicYear: readAcademicYear(), referenceDate });
   }
 
   function periodFromLabel(value) {
@@ -269,33 +255,62 @@
     return /^[1-6]$/.test(value) ? Number(value) : undefined;
   }
 
-  function addDays(isoDate, days) {
-    const date = new Date(`${isoDate}T00:00:00`);
-    date.setDate(date.getDate() + days);
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  function timetableDateAttribute(element, referenceDate) {
+    return ["data-date", "date", "data-day"].map((name) => element?.getAttribute(name))
+      .map((value) => dateFromLabel(value, referenceDate)).find(Boolean);
   }
 
-  function readTimetableDates(fallbackStartDate) {
-    const preferredScopes = ["#div-top-timetable1", "#div-top-timetable2", "#div-top-timetable", "#timetable"]
-      .map((selector) => document.querySelector(selector))
-      .filter(Boolean);
-    const scopes = preferredScopes.length ? preferredScopes : [document];
-    const attributeNames = ["data-date", "date", "data-start-date", "startdate", "data-day", "value", "href", "onclick", "title", "aria-label"];
-    const dates = [];
-    scopes.forEach((scope) => {
-      const elements = [scope, ...scope.querySelectorAll("[data-date], [date], [data-start-date], [startdate], [data-day], input[value], option[value], a[href], [onclick], [title], [aria-label]")];
-      elements.forEach((element) => {
-        const values = [text(element), ...attributeNames.map((name) => element.getAttribute?.(name) || "")];
-        values.forEach((value) => {
-          const found = dateFromLabel(value);
-          if (found && !dates.includes(found)) dates.push(found);
-        });
-      });
+  function readTimetableDates(table, grid, fallbackStartDate) {
+    const scope = table.closest("#div-top-timetable1, #div-top-timetable2, #div-top-timetable, #timetable") || table;
+    const explicitStart = [scope, ...scope.querySelectorAll("[data-start-date], [startdate]")]
+      .flatMap((element) => [element.getAttribute("data-start-date"), element.getAttribute("startdate")])
+      .find((value) => StudylogDateRules.validIsoDate(value));
+    let startDate = explicitStart || (StudylogDateRules.validIsoDate(fallbackStartDate) ? fallbackStartDate : undefined);
+    const firstRow = grid.find((row) => row.some((cell) => cell?.matches(".top-timetable-table-td"))) || [];
+    // 空の曜日列も数える。授業がある列だけを詰めると月曜などの日付がずれる。
+    const firstDayColumn = firstRow.findIndex((cell) => cell && !/^(?:時限|[1-6]\s*(?:時限|限)?)$/.test(text(cell))
+      && (cell.tagName !== "TH" || timetableDateAttribute(cell, startDate)));
+    if (firstDayColumn < 0) return new Map();
+    // 実ページでは曜日見出しが授業の表とは別の表にある。年度selectは曜日ではない。
+    const dayHeaders = [...(scope.closest(".table-responsive") || scope.parentElement || scope).querySelectorAll(".week-data")];
+    const buttons = [...document.querySelectorAll("a.a-load-timetable-select, button.a-load-timetable-select")];
+    const columnCount = Math.max(0, firstRow.length - firstDayColumn);
+    const columns = Array.from({ length: columnCount }, (_, dayIndex) => {
+      const columnIndex = firstDayColumn + dayIndex;
+      const header = grid.map((row) => row[columnIndex]).find((cell) => cell
+        && !cell.matches(".top-timetable-table-td") && !cell.querySelector('a[href*="/lms/class/"]')
+        && (cell.tagName === "TH" || cell.closest("thead"))
+        && (timetableDateAttribute(cell, startDate) || dateFromLabel(text(cell), startDate))) || dayHeaders[dayIndex];
+      const button = buttons[dayIndex];
+      const datedCell = grid.map((row) => row[columnIndex]).find((cell) => timetableDateAttribute(cell, startDate));
+      const dateLabel = header ? text(header) : button ? text(button) : undefined;
+      const date = timetableDateAttribute(datedCell, startDate) || timetableDateAttribute(header, startDate) || timetableDateAttribute(button, startDate)
+        || dateFromLabel(dateLabel, startDate);
+      return { columnIndex, header, datedCell, dateLabel, date };
     });
-    if (dates.length >= 2) return dates;
-    // 週の開始日だけが属性にある場合は、同じ週の7日分を読み取り専用で補完する。
-    const startDate = dates[0] || fallbackStartDate;
-    return startDate ? Array.from({ length: 7 }, (_, index) => addDays(startDate, index)) : [];
+    // 明示された列の日付から週開始日を復元し、年のない見出しの年も揃える。
+    const datedColumn = columns.findIndex((column) => column.date);
+    if (datedColumn >= 0) startDate = StudylogDateRules.addDays(columns[datedColumn].date, -datedColumn);
+    for (const [index, column] of columns.entries()) {
+      column.date = timetableDateAttribute(column.datedCell, startDate) || timetableDateAttribute(column.header, startDate) || timetableDateAttribute(buttons[index], startDate)
+        || dateFromLabel(column.dateLabel, startDate) || StudylogDateRules.addDays(startDate, index);
+    }
+    return new Map(columns.map((column) => [column.columnIndex, column]));
+  }
+
+  function timetableSignature() {
+    const table = document.querySelector(".top-timetable-table-td")?.closest("table");
+    if (!table) return "";
+    const scope = table.closest("#div-top-timetable1, #div-top-timetable2, #div-top-timetable, #timetable") || table;
+    const attributes = ["data-date", "date", "data-day", "data-start-date", "startdate", "colspan", "rowspan"];
+    const metadata = (element) => attributes.map((name) => element.getAttribute(name));
+    // 空白や拡張側の強調クラスの変更を、学校側の時間割更新と取り違えない。
+    return JSON.stringify([metadata(scope), [...table.querySelectorAll(".top-timetable-table-td, th, thead td"), ...document.querySelectorAll(".a-load-timetable-select")]
+      .map((element) => {
+        const link = element.querySelector('a[href*="/lms/class/"]');
+        const label = element.matches(".top-timetable-table-td") ? periodFromLabel(text(element)) : text(element);
+        return [label, link?.getAttribute("href"), ...metadata(element)];
+      })]);
   }
 
   function readTimetableTeacherName(cell) {
@@ -310,21 +325,13 @@
     if (!table) return [];
     const grid = tableGrid(table);
     const cells = [...table.querySelectorAll(".top-timetable-table-td")];
-    const dateButtons = [...document.querySelectorAll(".a-load-timetable-select")]
-      .map((element) => text(element))
-      .filter((label) => dateFromLabel(label));
-    const timetableDates = readTimetableDates(fallbackStartDate);
-    const orderedColumns = [...new Set(cells.map((cell) => {
-      const rowIndex = grid.findIndex((row) => row.includes(cell));
-      return rowIndex >= 0 ? grid[rowIndex].indexOf(cell) : -1;
-    }).filter((columnIndex) => columnIndex >= 0))].sort((a, b) => a - b);
+    const timetableDates = readTimetableDates(table, grid, fallbackStartDate);
     const lastCourseByColumn = new Map();
     const slots = [];
     cells.forEach((cell) => {
       const rowIndex = grid.findIndex((row) => row.includes(cell));
       const columnIndex = rowIndex >= 0 ? grid[rowIndex].indexOf(cell) : -1;
       if (rowIndex < 0 || columnIndex < 0) return;
-      const headerLabels = grid.slice(0, rowIndex).map((row) => text(row[columnIndex])).filter(Boolean);
       const rowLabels = grid[rowIndex].slice(0, columnIndex).map(text).filter(Boolean);
       const link = cell.querySelector('a[href*="/lms/class/"]');
       const route = parseClassLink(link?.getAttribute("href"));
@@ -337,8 +344,8 @@
       const course = route.classId ? { classId: route.classId, directoryId: route.directoryId, courseName: text(link), teacherName: parsedTeacherName, room: parsedRoom } : inherited;
       if (!course?.classId) return;
       if (route.classId) lastCourseByColumn.set(columnIndex, course);
-      const dateLabel = headerLabels.find((label) => dateFromLabel(label)) || dateButtons[columnIndex - 1];
-      const date = dateLabel ? dateFromLabel(dateLabel) : timetableDates[orderedColumns.indexOf(columnIndex)];
+      const dateLabel = timetableDates.get(columnIndex)?.dateLabel;
+      const date = timetableDateAttribute(cell, fallbackStartDate) || timetableDates.get(columnIndex)?.date;
       const period = rowLabels.map(periodFromLabel).find(Boolean) || periodFromLabel(rawText);
       const room = parsedRoom || inherited?.room;
       slots.push({
@@ -497,7 +504,8 @@
     // 旧版の説明本文つきエントリは、読み出し時点で端末内保存からも除去する。
     const oldItems = snapshot.directoryItems || [];
     const safeItems = oldItems.filter((item) => item.source !== "classPageDom");
-    if (safeItems.length !== oldItems.length) {
+    const datesChanged = StudylogDateRules.sanitizeSnapshot(snapshot);
+    if (safeItems.length !== oldItems.length || datesChanged) {
       snapshot.directoryItems = safeItems;
       await chrome.storage.local.set({ [STORAGE_KEY]: snapshot });
     }
@@ -505,6 +513,7 @@
   }
 
   async function saveSnapshot(snapshot) {
+    StudylogDateRules.sanitizeSnapshot(snapshot);
     await chrome.storage.local.set({ [STORAGE_KEY]: snapshot });
   }
 
@@ -558,6 +567,13 @@
       snapshot.directoryItems = uniqueBy([...snapshot.directoryItems, ...readCurrentDirectoryItems(snapshot.reports).map((item) => ({ ...item, academicYear }))], (item) => `${item.classId}:${item.directoryId}:${item.title}:${item.dueText || ""}:${item.href || ""}`);
     }
     if (kind === "top") {
+      // 読み込み途中で表が消えた場合は、保存済みの時間割を空で上書きしない。
+      if (!document.querySelector(".top-timetable-table-td")) return;
+      if (pendingTimetableRequest) {
+        if (!pendingTimetableRequest.completed || (!pendingTimetableRequest.rendered && timetableSignature() === pendingTimetableRequest.before)) return;
+        snapshot.timetableWeekStart = { startDate: pendingTimetableRequest.startDate, observedAt: new Date().toISOString() };
+        pendingTimetableRequest = null;
+      }
       snapshot.visibleTimetable = readVisibleTimetable();
       snapshot.timetableSlots = readNormalizedTimetable(snapshot.timetableWeekStart?.startDate);
     }
@@ -720,7 +736,7 @@
 
   function orderedSlots(snapshot) {
     return array(snapshot.timetableSlots)
-      .filter((slot) => slot.date && PERIOD_TIMES[Number(slot.period)])
+      .filter((slot) => StudylogDateRules.validIsoDate(slot.date) && PERIOD_TIMES[Number(slot.period)])
       .sort((a, b) => String(a.date).localeCompare(String(b.date)) || Number(a.period) - Number(b.period));
   }
 
@@ -763,7 +779,8 @@
       && directoryId && String(item.directoryId) === String(directoryId);
     const directory = array(snapshot.directories).find(matchesDirectory);
     const exactDates = [...new Set(slots.filter(matchesDirectory).map((slot) => slot.date))];
-    const lessonDate = directory?.lessonDate || dateFromLessonText(directory?.title, Number(directory?.academicYear || snapshot.academicYear));
+    const lessonDate = StudylogDateRules.validIsoDate(directory?.lessonDate) ? directory.lessonDate
+      : dateFromLessonText(directory?.title, Number(directory?.academicYear || snapshot.academicYear));
     const dates = exactDates.length ? exactDates : lessonDate ? [lessonDate]
       : [...new Set(slots.filter((slot) => String(slot.classId) === String(classId)).map((slot) => slot.date))];
     const contextKey = `${classId}:${directoryId || ""}`;
@@ -835,10 +852,11 @@
 
   function timetableCourseLine(slot, snapshot, { showTime = false } = {}) {
     const exam = unitExamForSlot(snapshot, slot);
+    const courseHref = /^\d+$/.test(String(slot.classId || "")) ? `/lms/class/${slot.classId}` : "";
     const meta = showTime
       ? `${PERIOD_TIMES[Number(slot.period)]?.start || ""} · ${slot.room ? `${slot.room}教室` : "教室未取得"}`
       : slot.room || "教室未取得";
-    return `<div class="studylog-context-line${exam ? " studylog-context-unit-exam" : ""}"><strong>${escapeHtml(slot.period)}限 ${escapeHtml(slot.courseName || courseName(snapshot, slot.classId))}${exam ? unitExamLabel() : ""}</strong><span>${escapeHtml(meta)}</span></div>`;
+    return `<div class="studylog-context-line${exam ? " studylog-context-unit-exam" : ""}"><strong>${escapeHtml(slot.period)}限 ${escapeHtml(slot.courseName || courseName(snapshot, slot.classId))}${exam ? unitExamLabel() : ""}</strong><span>${escapeHtml(meta)}</span>${courseHref ? `<a class="studylog-context-course-link" href="${escapeHtml(courseHref)}">科目を開く</a>` : ""}</div>`;
   }
 
   function markUnitExamTimetable(snapshot) {
@@ -849,18 +867,314 @@
     const grid = tableGrid(table);
     const examHeaders = new Set();
     const slots = readNormalizedTimetable(snapshot.timetableWeekStart?.startDate);
+    const dateColumns = readTimetableDates(table, grid, snapshot.timetableWeekStart?.startDate);
     slots.forEach((slot) => {
       const cell = grid[slot.rowIndex]?.[slot.columnIndex];
       if (!cell) return;
       const exam = unitExamForSlot(snapshot, slot);
       cell.classList.toggle("studylog-unit-exam-cell", Boolean(exam));
       if (!exam) return;
-      const header = grid.slice(0, slot.rowIndex).map((row) => row[slot.columnIndex]).reverse().find((candidate) => dateFromLabel(text(candidate)));
+      const header = dateColumns.get(slot.columnIndex)?.header;
       if (header) examHeaders.add(header);
     });
-    const currentHeaders = table.querySelectorAll(".studylog-unit-exam-day");
+    const currentHeaders = document.querySelectorAll(".studylog-unit-exam-day");
     new Set([...currentHeaders, ...examHeaders]).forEach((header) => header.classList.toggle("studylog-unit-exam-day", examHeaders.has(header)));
   }
+
+  function quickMemoMarkdown(source) {
+    const inline = (value) => {
+      const tokens = /`([^`]+)`|\*\*([^*]+)\*\*|\*([^*]+)\*|\[([^\]]+)\]\(([^\s)]+)\)/g;
+      let html = "", offset = 0;
+      for (const match of value.matchAll(tokens)) {
+        html += escapeHtml(value.slice(offset, match.index));
+        if (match[1] !== undefined) html += `<code>${escapeHtml(match[1])}</code>`;
+        else if (match[2] !== undefined) html += `<strong>${inline(match[2])}</strong>`;
+        else if (match[3] !== undefined) html += `<em>${inline(match[3])}</em>`;
+        else {
+          let url;
+          try { url = new URL(match[5]); } catch { /* 不正なリンクは文字として表示する。 */ }
+          html += url && ["https:", "http:", "mailto:"].includes(url.protocol)
+            ? `<a href="${escapeHtml(url.href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(match[4])}</a>`
+            : escapeHtml(match[0]);
+        }
+        offset = match.index + match[0].length;
+      }
+      return html + escapeHtml(value.slice(offset));
+    };
+    const lines = source.replace(/\r\n?/g, "\n").split("\n");
+    const blocks = [];
+    let list = "";
+    const endList = () => { if (list) blocks.push(`</${list}>`); list = ""; };
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index];
+      const item = line.match(/^\s*(?:([-*])|\d+\.)\s+(.+)$/);
+      if (item) {
+        const kind = item[1] ? "ul" : "ol";
+        if (list !== kind) { endList(); blocks.push(`<${kind}>`); list = kind; }
+        const task = item[2].match(/^\[([ xX])\]\s+(.*)$/);
+        blocks.push(task ? `<li class="studylog-memo-task"><input type="checkbox" disabled${task[1] !== " " ? " checked" : ""}>${inline(task[2])}</li>` : `<li>${inline(item[2])}</li>`);
+        continue;
+      }
+      endList();
+      if (/^\s*```/.test(line)) {
+        const code = [];
+        while (++index < lines.length && !/^\s*```\s*$/.test(lines[index])) code.push(lines[index]);
+        blocks.push(`<pre><code>${escapeHtml(code.join("\n"))}</code></pre>`);
+      } else {
+        const heading = line.match(/^(#{1,3})\s+(.+)$/);
+        const quote = line.match(/^>\s?(.*)$/);
+        if (heading) blocks.push(`<h${heading[1].length}>${inline(heading[2])}</h${heading[1].length}>`);
+        else if (quote) blocks.push(`<blockquote>${inline(quote[1])}</blockquote>`);
+        else blocks.push(line ? `<p>${inline(line)}</p>` : "<br>");
+      }
+    }
+    endList();
+    return blocks.join("");
+  }
+
+  function updatePortalScheduleMemoVisibility(preferences = {}) {
+    document.documentElement.toggleAttribute("data-studylog-show-portal-schedule-memo", preferences.showPortalScheduleMemo === true);
+  }
+
+  async function renderQuickMemoButtons(snapshot) {
+    if (isQuizScreen()) return;
+    const table = document.querySelector(".top-timetable-table-td")?.closest("table");
+    const wanted = new Set();
+    const keys = new Set();
+    if (table) {
+      const grid = tableGrid(table);
+      const columns = readTimetableDates(table, grid, snapshot.timetableWeekStart?.startDate);
+      const daySelectors = [...document.querySelectorAll("a.a-load-timetable-select, button.a-load-timetable-select")];
+      const addButton = (host, key, label, after = false) => {
+        let button = [...host.querySelectorAll(".studylog-memo-button")].find((item) => item.dataset.memoKey === key);
+        if (after) button = host.nextElementSibling?.matches(".studylog-memo-button") ? host.nextElementSibling : null;
+        if (!button) {
+          button = document.createElement("button");
+          button.type = "button";
+          button.className = "studylog-memo-button";
+          // 曜日ボタンはSVGだけにして、見出しの日付の読み取りを変えない。
+          button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4H5v16h14v-9M10 14l1-4 7-7 3 3-7 7-4 1Z"/></svg>';
+          if (key.startsWith(`${QUICK_MEMO_PREFIX}course:`)) button.append("メモ");
+          if (after) host.after(button);
+          else host.append(button);
+        }
+        button.dataset.memoKey = key;
+        button.dataset.memoLabel = label;
+        button.setAttribute("aria-label", `${label}の共有メモ`);
+        button.title = `${label}の共有メモ`;
+        wanted.add(button);
+        keys.add(key);
+      };
+      let dayBar = document.querySelector(".studylog-memo-day-bar");
+      for (const [index, [columnIndex, column]] of [...columns].entries()) {
+        const header = column.header || grid.map((row) => row[columnIndex]).find((cell) => cell
+          && !cell.matches(".top-timetable-table-td") && (cell.tagName === "TH" || cell.closest("thead")) && cell.colSpan === 1);
+        const selector = daySelectors[index];
+        const label = text(header || selector);
+        const namedDay = label.match(/(?:^|[（(\s])([日月火水木金土])(?:曜(?:日)?)?(?:[）)\s]|$)/)?.[1];
+        const weekday = StudylogDateRules.validIsoDate(column.date) ? new Date(`${column.date}T00:00:00`).getDay() : WEEKDAY_NAMES.indexOf(namedDay);
+        if (weekday < 0) continue;
+        const memoKey = `${QUICK_MEMO_PREFIX}weekday:${weekday}`;
+        const memoLabel = `${WEEKDAY_NAMES[weekday]}曜日`;
+        if (header) addButton(header, memoKey, memoLabel);
+        else if (selector) addButton(selector, memoKey, memoLabel, true);
+        else {
+          if (!dayBar) {
+            dayBar = document.createElement("div");
+            dayBar.className = "studylog-memo-day-bar";
+            dayBar.setAttribute("aria-label", "曜日の共有メモ");
+            table.before(dayBar);
+          }
+          let host = [...dayBar.children].find((item) => item.dataset.weekday === String(weekday));
+          if (!host) {
+            host = document.createElement("span");
+            host.dataset.weekday = String(weekday);
+            host.textContent = `${WEEKDAY_NAMES[weekday]}曜`;
+            dayBar.append(host);
+          }
+          addButton(host, memoKey, memoLabel);
+        }
+      }
+      const previousByColumn = new Map();
+      readNormalizedTimetable(snapshot.timetableWeekStart?.startDate).forEach((slot) => {
+        const previous = previousByColumn.get(slot.columnIndex);
+        previousByColumn.set(slot.columnIndex, slot);
+        // 省略表示・科目名の繰り返し表示とも、連続する授業の開始時限だけに置く。
+        if (slot.continuation || (previous?.classId === slot.classId && previous.date === slot.date && slot.period === previous.period + 1)) return;
+        const cell = grid[slot.rowIndex]?.[slot.columnIndex];
+        if (!cell) return;
+        let host = cell.querySelector(".studylog-memo-course-row");
+        if (!host) {
+          const link = cell.querySelector('a[href*="/lms/class/"]');
+          if (!link) return;
+          // Tree Ivyは.div-class-name内のspanを出席表示としてクリック不可にする。
+          host = document.createElement("div");
+          host.className = "studylog-memo-course-row";
+          link.before(host);
+          host.append(link);
+        }
+        addButton(host, `${QUICK_MEMO_PREFIX}course:${slot.classId}`, slot.courseName || courseName(snapshot, slot.classId));
+      });
+    }
+    document.querySelectorAll(".studylog-memo-button").forEach((button) => { if (!wanted.has(button)) button.remove(); });
+    document.querySelectorAll(".studylog-memo-day-bar > span").forEach((host) => { if (!host.querySelector("button")) host.remove(); });
+    document.querySelectorAll(".studylog-memo-day-bar").forEach((bar) => { if (!bar.childElementCount) bar.remove(); });
+    if (keys.size) {
+      const stored = await chrome.storage.local.get([...keys]);
+      for (const key of keys) quickMemoTexts.set(key, typeof stored[key] === "string" ? stored[key] : "");
+    }
+    if (quickMemoEditor && !quickMemoEditor.anchor.isConnected) {
+      quickMemoEditor.anchor = [...wanted].find((button) => button.dataset.memoKey === quickMemoEditor.key) || quickMemoEditor.anchor;
+      positionQuickMemo();
+    }
+  }
+
+  function positionQuickMemo() {
+    if (!quickMemoEditor) return;
+    const { dialog, anchor } = quickMemoEditor;
+    const rect = anchor.getBoundingClientRect();
+    const width = dialog.offsetWidth, height = dialog.offsetHeight;
+    dialog.style.left = `${Math.max(8, Math.min(rect.right - width, innerWidth - width - 8))}px`;
+    dialog.style.top = `${Math.max(8, Math.min(rect.bottom + 6, innerHeight - height - 8))}px`;
+  }
+
+  function showQuickMemoMode(editor, editing) {
+    editor.dialog.dataset.editing = String(editing);
+    editor.dialog.querySelector("textarea").hidden = !editing;
+    editor.dialog.querySelector(".studylog-memo-preview").hidden = editing;
+    editor.dialog.querySelectorAll("[data-memo-mode]").forEach((button) => button.setAttribute("aria-pressed", String((button.dataset.memoMode === "edit") === editing)));
+    positionQuickMemo();
+    if (editing) editor.dialog.querySelector("textarea").focus();
+  }
+
+  function setQuickMemoStatus(editor, text, state) {
+    editor.status.dataset.state = state;
+    editor.status.querySelector(".studylog-memo-status-icon").textContent = state === "saved" ? "✓" : "!";
+    editor.status.querySelector(".studylog-memo-status-text").textContent = text;
+  }
+
+  async function saveQuickMemo(editor) {
+    clearTimeout(editor.timer);
+    if (editor.saving) return editor.saving;
+    editor.saving = (async () => {
+      while (editor.value !== editor.saved) {
+        const value = editor.value;
+        setQuickMemoStatus(editor, "保存中…", "attention");
+        try {
+          await chrome.storage.local.set({ [editor.key]: value });
+        } catch {
+          setQuickMemoStatus(editor, "保存できませんでした。入力は残っています。「再保存」で試せます。", "attention");
+          editor.dialog.querySelector("[data-memo-retry]").hidden = false;
+          return false;
+        }
+        editor.saved = value;
+        quickMemoTexts.set(editor.key, value);
+      }
+      setQuickMemoStatus(editor, "保存済み", "saved");
+      editor.dialog.querySelector("[data-memo-retry]").hidden = true;
+      return true;
+    })();
+    try { return await editor.saving; }
+    finally { editor.saving = null; }
+  }
+
+  async function closeQuickMemo({ restoreFocus = false } = {}) {
+    const editor = quickMemoEditor;
+    if (!editor) return true;
+    if (!await saveQuickMemo(editor)) return false;
+    if (quickMemoEditor !== editor) return true;
+    editor.resizeObserver.disconnect();
+    editor.dialog.remove();
+    quickMemoEditor = null;
+    if (restoreFocus && editor.anchor.isConnected) editor.anchor.focus();
+    return true;
+  }
+
+  async function openQuickMemo(anchor) {
+    const key = anchor.dataset.memoKey;
+    if (!/^studylogQuickMemoV1:(?:weekday:[0-6]|course:\d+)$/.test(key)) return;
+    const request = ++quickMemoOpenRequest;
+    if (!await closeQuickMemo()) return;
+    if (isQuizScreen() || !anchor.isConnected) return;
+    let stored;
+    try { stored = await chrome.storage.local.get(key); }
+    catch { stored = {}; }
+    if (request !== quickMemoOpenRequest || isQuizScreen() || !anchor.isConnected) return;
+    // 保存領域を読めなかった場合も、すでに取得済みの本文を残す。
+    const value = typeof stored[key] === "string" ? stored[key] : quickMemoTexts.get(key) || "";
+    const dialog = document.createElement("dialog");
+    dialog.id = QUICK_MEMO_ROOT_ID;
+    dialog.setAttribute("aria-labelledby", "studylog-memo-title");
+    dialog.innerHTML = `<header><div><small>クイックメモ</small><h2 id="studylog-memo-title">${escapeHtml(anchor.dataset.memoLabel)}</h2></div><button type="button" data-memo-close aria-label="メモを閉じる">×</button></header>
+      <div class="studylog-memo-modes"><button type="button" data-memo-mode="edit">編集</button><button type="button" data-memo-mode="preview">プレビュー</button></div>
+      <textarea aria-label="共有メモの本文" placeholder="# 持ち物\n- 教科書\n- **電卓**" spellcheck="false"></textarea>
+      <div class="studylog-memo-preview"></div>
+      <details><summary>Markdownの書き方</summary><p><code># 見出し</code> · <code>**太字**</code> · <code>*斜体*</code> · <code>- 箇条書き</code> · <code>- [ ] チェック</code> · <code>\`コード\`</code> · <code>&gt; 引用</code> · <code>[名前](https://…)</code></p></details>
+      <footer><div class="studylog-memo-footer-info"><span class="studylog-memo-scope">${key.includes(":weekday:") ? "すべての同じ曜日で共有" : "この科目のすべての授業で共有"}</span><span class="studylog-memo-save-status" role="status" aria-live="polite" data-state="saved"><span class="studylog-memo-status-icon" aria-hidden="true">✓</span><span class="studylog-memo-status-text">保存済み</span></span></div><button type="button" data-memo-retry hidden>再保存</button><button type="button" data-memo-close>閉じる</button></footer>`;
+    document.documentElement.append(dialog);
+    const editor = { dialog, anchor, key, value, saved: value, status: dialog.querySelector('[role="status"]'), saving: null, timer: null };
+    quickMemoEditor = editor;
+    editor.resizeObserver = new ResizeObserver(positionQuickMemo);
+    editor.resizeObserver.observe(dialog);
+    const input = dialog.querySelector("textarea");
+    const preview = dialog.querySelector(".studylog-memo-preview");
+    const renderPreview = () => { preview.innerHTML = editor.value.trim() ? quickMemoMarkdown(editor.value) : '<p class="studylog-memo-empty">まだメモはありません。</p>'; };
+    input.value = value;
+    setQuickMemoStatus(editor, value ? "保存済み" : "入力すると自動保存します", "saved");
+    renderPreview();
+    dialog.show();
+    showQuickMemoMode(editor, !value.trim());
+    input.addEventListener("input", () => {
+      editor.value = input.value;
+      setQuickMemoStatus(editor, "未保存…", "attention");
+      renderPreview();
+      clearTimeout(editor.timer);
+      editor.timer = setTimeout(() => saveQuickMemo(editor), 400);
+    });
+    input.addEventListener("blur", () => saveQuickMemo(editor));
+    dialog.addEventListener("click", (event) => {
+      if (event.target.closest("[data-memo-close]")) closeQuickMemo({ restoreFocus: true });
+      if (event.target.closest("[data-memo-retry]")) saveQuickMemo(editor);
+      const mode = event.target.closest("[data-memo-mode]")?.dataset.memoMode;
+      if (mode) showQuickMemoMode(editor, mode === "edit");
+    });
+    dialog.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") { event.preventDefault(); closeQuickMemo({ restoreFocus: true }); }
+    });
+  }
+
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest?.(".studylog-memo-button");
+    if (button) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      openQuickMemo(button);
+    } else if (quickMemoEditor && !event.composedPath().includes(quickMemoEditor.dialog)) closeQuickMemo();
+  }, true);
+  window.addEventListener("resize", positionQuickMemo);
+  window.addEventListener("scroll", positionQuickMemo, true);
+  window.addEventListener("beforeunload", (event) => {
+    if (quickMemoEditor && quickMemoEditor.value !== quickMemoEditor.saved) {
+      saveQuickMemo(quickMemoEditor);
+      event.preventDefault();
+      event.returnValue = "";
+    }
+  });
+  chrome.storage.onChanged?.addListener((changes, area) => {
+    if (area !== "local") return;
+    if (changes[PREFS_KEY]) updatePortalScheduleMemoVisibility(changes[PREFS_KEY].newValue || {});
+    for (const [key, change] of Object.entries(changes)) {
+      if (!key.startsWith(QUICK_MEMO_PREFIX)) continue;
+      const value = typeof change.newValue === "string" ? change.newValue : "";
+      quickMemoTexts.set(key, value);
+      const editor = quickMemoEditor;
+      if (editor?.key === key && !editor.saving && editor.value === editor.saved) {
+        editor.value = editor.saved = value;
+        editor.dialog.querySelector("textarea").value = value;
+        editor.dialog.querySelector(".studylog-memo-preview").innerHTML = value.trim() ? quickMemoMarkdown(value) : '<p class="studylog-memo-empty">まだメモはありません。</p>';
+      }
+    }
+  });
 
   function portalPendingReports(snapshot, preferences, filters = {}) {
     return array(snapshot.reports).filter((report) => {
@@ -892,7 +1206,7 @@
   }
 
   function formatContextDate(value) {
-    if (!value) return "";
+    if (!StudylogDateRules.validIsoDate(value)) return "";
     const date = new Date(`${value}T00:00:00`);
     if (Number.isNaN(date.valueOf())) return "";
     return new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric", weekday: "short" }).format(date);
@@ -1261,6 +1575,7 @@
     const [snapshot, preferences] = suppliedSnapshot && suppliedPreferences
       ? [suppliedSnapshot, suppliedPreferences]
       : await Promise.all([readSnapshot(), readPreferences()]);
+    updatePortalScheduleMemoVisibility(preferences);
     const scene = pageScene();
     const navigation = courseNavigationContext(snapshot);
     root.querySelector("#studylog-course-navigation").hidden = !navigation;
@@ -1297,6 +1612,7 @@
     const updated = snapshot.collectedAt ? new Date(snapshot.collectedAt).toLocaleString("ja-JP") : "未取得";
     root.querySelector("#studylog-bridge-status").textContent = `最終取得: ${updated}`;
     markUnitExamTimetable(snapshot);
+    await renderQuickMemoButtons(snapshot);
     renderInlineTaskControls(snapshot, preferences);
     root.dataset.ready = "true";
   }
@@ -1629,15 +1945,20 @@
   }
   injectPageHook();
 
-  window.addEventListener("studylog-bridge:schedule-request", async (event) => {
+  window.addEventListener("studylog-bridge:schedule-request", (event) => {
     const startDate = readScheduleStartDate(event.detail?.url);
     if (!startDate) return;
-    const snapshot = prepareSnapshotForCurrentYear(await readSnapshot());
-    snapshot.timetableWeekStart = { startDate, observedAt: new Date().toISOString() };
-    if (pageKind() === "top") {
-      snapshot.timetableSlots = readNormalizedTimetable(startDate);
+    pendingTimetableRequest = { startDate, requestId: event.detail?.requestId, before: timetableSignature(), completed: false, rendered: false };
+  });
+
+  window.addEventListener("studylog-bridge:schedule-response", (event) => {
+    if (!pendingTimetableRequest || event.detail?.requestId !== pendingTimetableRequest.requestId) return;
+    if (event.detail.status < 200 || event.detail.status >= 300) {
+      pendingTimetableRequest = null;
+      return;
     }
-    await saveSnapshot(snapshot);
+    pendingTimetableRequest.completed = true;
+    window.setTimeout(() => captureCurrentPageAutomatically().catch(() => null), 300);
   });
 
   window.addEventListener("studylog-bridge:location-change", () => syncPageMode(true));
@@ -1659,6 +1980,11 @@
       lastQuizMode = quiz;
     }
     if (quiz) {
+      if (quickMemoEditor) {
+        saveQuickMemo(quickMemoEditor);
+        quickMemoEditor.dialog.hidden = true;
+      }
+      document.querySelectorAll(".studylog-memo-button, .studylog-memo-day-bar").forEach((element) => element.remove());
       document.getElementById(ROOT_ID)?.remove();
       if (isQuizDebugMode()) installQuizInspector();
       else document.getElementById(QUIZ_INSPECTOR_ROOT_ID)?.remove();
@@ -1667,6 +1993,7 @@
     }
 
     clearTimeout(quizAutoSaveTimer);
+    if (quickMemoEditor) quickMemoEditor.dialog.hidden = false;
     quizAutoSaveQueued = false;
     document.getElementById(QUIZ_INSPECTOR_ROOT_ID)?.remove();
     const root = document.getElementById(ROOT_ID);
@@ -2002,7 +2329,19 @@
 
   function observeCurrentPage() {
     const observer = new MutationObserver((mutations) => {
-      const outsideCompanion = mutations.some((mutation) => !mutation.target.closest?.(`#${ROOT_ID}, #${QUIZ_INSPECTOR_ROOT_ID}`));
+      if (pendingTimetableRequest) {
+        const table = document.querySelector(".top-timetable-table-td")?.closest("table");
+        // 同じ授業内容の週でも、表の再描画を観測できれば新しい週として取得する。
+        pendingTimetableRequest.rendered ||= mutations.some((mutation) => [...mutation.addedNodes].some((node) => node.nodeType === 1
+          && (node.matches("table, tbody, tr, td, th") || node.querySelector(".top-timetable-table-td"))
+          && (node.closest("table") === table || (table && node.contains(table)))));
+      }
+      const outsideCompanion = mutations.some((mutation) => {
+        const ownUi = `#${ROOT_ID}, #${QUIZ_INSPECTOR_ROOT_ID}, #${QUICK_MEMO_ROOT_ID}, .studylog-memo-button, .studylog-memo-day-bar`;
+        if (mutation.target.closest?.(ownUi)) return false;
+        const changedNodes = [...mutation.addedNodes, ...mutation.removedNodes];
+        return !changedNodes.length || changedNodes.some((node) => !node.matches?.(ownUi));
+      });
       if (!outsideCompanion) return;
       if (isQuizScreen()) {
         syncPageMode(false);

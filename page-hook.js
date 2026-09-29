@@ -112,39 +112,58 @@
     }));
   }
 
-  const notifyIfScheduleRequest = (value) => {
-    const url = typeof value === "string" ? value : value?.url;
-    if (typeof url === "string" && /getScheduleCalendar\.php|glexa_ajax_schedule_view/.test(url)) {
-      window.dispatchEvent(new CustomEvent("studylog-bridge:schedule-request", { detail: { url } }));
+  const notifyIfScheduleRequest = (value, body, requestId) => {
+    const url = typeof value === "string" ? value : value instanceof URL ? value.href : value?.url;
+    const params = new Map(bodyEntries(body).map(([key, item]) => [String(key), String(item)]));
+    if (typeof url !== "string" || !/getScheduleCalendar\.php|glexa_ajax_schedule_view/.test(`${url} ${params.get("action") || ""}`)) return;
+    try {
+      const parsed = new URL(url, location.href);
+      const startDate = parsed.searchParams.get("startDate") || parsed.searchParams.get("startdate") || params.get("startDate") || params.get("startdate");
+      if (!startDate) return;
+      const scheduleUrl = `${parsed.pathname}?startDate=${encodeURIComponent(startDate)}`;
+      window.dispatchEvent(new CustomEvent("studylog-bridge:schedule-request", { detail: { url: scheduleUrl, requestId } }));
+      return scheduleUrl;
+    } catch {
+      return undefined;
     }
+  };
+
+  const notifyScheduleResponse = (url, requestId, status) => {
+    if (url) window.dispatchEvent(new CustomEvent("studylog-bridge:schedule-response", { detail: { url, requestId, status } }));
   };
 
   const xhrMetadata = new WeakMap();
   const originalOpen = XMLHttpRequest.prototype.open;
   XMLHttpRequest.prototype.open = function (method, url) {
-    notifyIfScheduleRequest(url);
-    xhrMetadata.set(this, { method: String(method || "GET").toUpperCase(), url: safeUrl(url) });
+    xhrMetadata.set(this, { method: String(method || "GET").toUpperCase(), url: safeUrl(url), rawUrl: url });
     return originalOpen.apply(this, arguments);
   };
 
   const originalSend = XMLHttpRequest.prototype.send;
   XMLHttpRequest.prototype.send = function (body) {
     const requestId = `xhr-${++requestSequence}`;
-    const metadata = xhrMetadata.get(this) || { method: "GET", url: "(URLを取得できません)" };
+    const { rawUrl, ...metadata } = xhrMetadata.get(this) || { method: "GET", url: "(URLを取得できません)" };
+    const scheduleUrl = notifyIfScheduleRequest(rawUrl, body, requestId);
     const write = metadata.method === "GET" ? null : learningWrite(metadata.url, body);
     if (write) emitLearningWrite({ phase: "submitted" });
     emit({ phase: "request", transport: "xhr", requestId, ...metadata, fields: bodyFields(body), hints: commandHints(body), source: callSource() });
     this.addEventListener("loadend", () => {
+      notifyScheduleResponse(scheduleUrl, requestId, Number(this.status) || 0);
       emit({ phase: "response", transport: "xhr", requestId, ...metadata, status: Number(this.status) || 0 });
       if (write) emitLearningWrite({ phase: "response", status: Number(this.status) || 0 });
     }, { once: true });
-    return originalSend.apply(this, arguments);
+    try {
+      return originalSend.apply(this, arguments);
+    } catch (error) {
+      notifyScheduleResponse(scheduleUrl, requestId, 0);
+      throw error;
+    }
   };
 
   const originalFetch = window.fetch;
   window.fetch = function (input, init) {
-    notifyIfScheduleRequest(input);
     const requestId = `fetch-${++requestSequence}`;
+    const scheduleUrl = notifyIfScheduleRequest(input, init?.body, requestId);
     const method = String(init?.method || input?.method || "GET").toUpperCase();
     const url = safeUrl(input);
     const fields = bodyFields(init?.body);
@@ -155,14 +174,17 @@
     try {
       result = originalFetch.call(this, input, init);
     } catch (error) {
+      notifyScheduleResponse(scheduleUrl, requestId, 0);
       emit({ phase: "response", transport: "fetch", requestId, method, url, status: 0, failed: true });
       throw error;
     }
     return Promise.resolve(result).then((response) => {
+      notifyScheduleResponse(scheduleUrl, requestId, Number(response.status) || 0);
       emit({ phase: "response", transport: "fetch", requestId, method, url, status: Number(response.status) || 0 });
       if (write) emitLearningWrite({ phase: "response", status: Number(response.status) || 0 });
       return response;
     }, (error) => {
+      notifyScheduleResponse(scheduleUrl, requestId, 0);
       emit({ phase: "response", transport: "fetch", requestId, method, url, status: 0, failed: true });
       throw error;
     });

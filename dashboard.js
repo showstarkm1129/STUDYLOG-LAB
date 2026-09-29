@@ -44,6 +44,7 @@
     pageOrder: BUILTIN_PAGES.map((page) => page.id),
     lastPageId: "home",
     startPageId: "home",
+    showPortalScheduleMemo: false,
     attendanceWatch: {
       enabled: false,
       mode: "entry",
@@ -102,6 +103,7 @@
     return {
       ...defaultPreferences,
       ...normalized,
+      showPortalScheduleMemo: normalized.showPortalScheduleMemo === true,
       manualCompleted: array(normalized.manualCompleted),
       notRequired: array(normalized.notRequired),
       completionIncludedCourseIds: Array.isArray(normalized.completionIncludedCourseIds)
@@ -176,13 +178,17 @@
   function parseDate(value, fallbackYear) {
     if (!value) return null;
     if (value instanceof Date) return Number.isNaN(value.valueOf()) ? null : new Date(value);
-    const direct = new Date(value);
-    if (!Number.isNaN(direct.valueOf())) return direct;
-    const match = String(value).normalize("NFKC").match(/(?:(20\d{2})\D+)?(\d{1,2})\D+(\d{1,2})(?:\D+(\d{1,2})[:時](\d{1,2})?)?/);
-    if (!match) return null;
-    const year = Number(match[1] || fallbackYear || state.snapshot?.academicYear || new Date().getFullYear());
-    const result = new Date(year, Number(match[2]) - 1, Number(match[3]), Number(match[4] || 0), Number(match[5] || 0));
-    return Number.isNaN(result.valueOf()) ? null : result;
+    const source = String(value).normalize("NFKC");
+    if (/^20\d{2}-\d{2}-\d{2}(?:$|[T\s])/.test(source)) {
+      if (!StudylogDateRules.validIsoDate(source.slice(0, 10))) return null;
+      const direct = new Date(source.length === 10 ? `${source}T00:00:00` : source);
+      return Number.isNaN(direct.valueOf()) ? null : direct;
+    }
+    const date = StudylogDateRules.fromText(source, { academicYear: Number(fallbackYear || state.snapshot?.academicYear || dashboardNow().getFullYear()) });
+    if (!date) return null;
+    const time = source.match(/(?:T|\s)(\d{1,2})[:時](\d{1,2})(?:分)?/);
+    if (time && (Number(time[1]) > 23 || Number(time[2]) > 59)) return null;
+    return new Date(`${date}T${time ? `${String(time[1]).padStart(2, "0")}:${String(time[2]).padStart(2, "0")}` : "00:00"}:00`);
   }
 
   function formatDate(value, long = false) {
@@ -474,22 +480,13 @@
 
   function orderedTimetableSlots() {
     return array(state.snapshot?.timetableSlots)
-      .filter((slot) => slot.date && PERIOD_TIMES[Number(slot.period)])
+      .filter((slot) => StudylogDateRules.validIsoDate(slot.date) && PERIOD_TIMES[Number(slot.period)])
       .sort((a, b) => String(a.date).localeCompare(String(b.date)) || Number(a.period) - Number(b.period));
   }
 
   function unitExamDirectoryDate(directory) {
-    if (directory?.lessonDate) return String(directory.lessonDate);
-    const title = String(directory?.title || "").normalize("NFKC");
-    const compact = title.match(/(?:^|[_\s(（])(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(?=$|[_\s)）])/);
-    if (!compact) return null;
-    const month = Number(compact[1]);
-    const day = Number(compact[2]);
-    const academicYear = Number(directory?.academicYear || state.snapshot?.academicYear || dashboardNow().getFullYear());
-    const year = academicYear + (month < 4 ? 1 : 0);
-    const date = new Date(year, month - 1, day);
-    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
-    return isoDay(date);
+    if (StudylogDateRules.validIsoDate(directory?.lessonDate)) return directory.lessonDate;
+    return StudylogDateRules.fromText(directory?.title, { academicYear: Number(directory?.academicYear || state.snapshot?.academicYear || dashboardNow().getFullYear()), compact: true }) || null;
   }
 
   function isUnitExamTitle(value) {
@@ -2142,6 +2139,7 @@
     try {
       const parsed = JSON.parse(await file.text());
       if (!parsed || !Array.isArray(parsed.courses) || !Array.isArray(parsed.reports)) throw new Error("Studylog Bridge形式ではありません");
+      StudylogDateRules.sanitizeSnapshot(parsed);
       state.snapshot = parsed;
       if (Array.isArray(parsed.studylogDashboard?.manualCompleted)) {
         state.prefs.manualCompleted = parsed.studylogDashboard.manualCompleted;
@@ -2158,6 +2156,7 @@
       if (Array.isArray(parsed.studylogDashboard?.pageOrder)) state.prefs.pageOrder = parsed.studylogDashboard.pageOrder;
       if (parsed.studylogDashboard?.lastPageId) state.prefs.lastPageId = String(parsed.studylogDashboard.lastPageId);
       if (parsed.studylogDashboard?.startPageId) state.prefs.startPageId = String(parsed.studylogDashboard.startPageId);
+      if (typeof parsed.studylogDashboard?.showPortalScheduleMemo === "boolean") state.prefs.showPortalScheduleMemo = parsed.studylogDashboard.showPortalScheduleMemo;
       state.prefs = normalizePreferences(state.prefs);
       if (!pageExists(state.view)) state.view = state.prefs.startPageId;
       await storageSet({ [SNAPSHOT_KEY]: parsed, [PREFS_KEY]: state.prefs, [AUTO_COLLECT_STATE_KEY]: null });
@@ -2283,6 +2282,26 @@
     $("#page-settings-form").addEventListener("submit", savePageSettings);
     $("#delete-custom-page").addEventListener("click", deleteCustomPage);
     $("#open-data-dialog").addEventListener("click", openDataDialog);
+    $("#open-display-settings-dialog").addEventListener("click", () => {
+      $("#show-portal-schedule-memo").checked = state.prefs.showPortalScheduleMemo;
+      $("#display-settings-dialog").showModal();
+    });
+    $("#show-portal-schedule-memo").addEventListener("change", async (event) => {
+      const toggle = event.currentTarget;
+      const previous = state.prefs.showPortalScheduleMemo;
+      state.prefs.showPortalScheduleMemo = toggle.checked;
+      toggle.disabled = true;
+      try {
+        await savePreferences();
+        toast(state.prefs.showPortalScheduleMemo ? "標準のメモボタンを表示しました" : "標準のメモボタンを非表示にしました");
+      } catch {
+        state.prefs.showPortalScheduleMemo = previous;
+        toggle.checked = previous;
+        toast("表示設定を保存できませんでした。もう一度お試しください。");
+      } finally {
+        toggle.disabled = false;
+      }
+    });
     $("#open-attendance-watch-dialog").addEventListener("click", () => { openAttendanceWatchDialog().catch(() => {}); });
     $("#attendance-watch-body").addEventListener("change", (event) => { handleAttendanceWatchChange(event).catch(() => {}); });
     $("#attendance-watch-body").addEventListener("click", (event) => {
@@ -2338,7 +2357,7 @@
     $("#json-import").addEventListener("change", (event) => importJson(event.target.files?.[0]));
     $("#json-export").addEventListener("click", () => {
       if (!snapshotReady()) return toast("書き出すデータがありません");
-      const payload = { ...state.snapshot, studylogDashboard: { schemaVersion: 4, manualCompleted: state.prefs.manualCompleted, notRequired: state.prefs.notRequired, completionIncludedCourseIds: state.prefs.completionIncludedCourseIds, layoutSchemaVersion: state.prefs.layoutSchemaVersion, customPages: state.prefs.customPages, pageOrder: state.prefs.pageOrder, lastPageId: state.prefs.lastPageId, startPageId: state.prefs.startPageId } };
+      const payload = { ...state.snapshot, studylogDashboard: { schemaVersion: 4, manualCompleted: state.prefs.manualCompleted, notRequired: state.prefs.notRequired, completionIncludedCourseIds: state.prefs.completionIncludedCourseIds, layoutSchemaVersion: state.prefs.layoutSchemaVersion, customPages: state.prefs.customPages, pageOrder: state.prefs.pageOrder, lastPageId: state.prefs.lastPageId, startPageId: state.prefs.startPageId, showPortalScheduleMemo: state.prefs.showPortalScheduleMemo } };
       download(`studylog-dashboard-${isoDay(new Date())}.json`, "application/json", JSON.stringify(payload, null, 2));
     });
     document.addEventListener("pointerover", (event) => {
@@ -2522,10 +2541,12 @@
       let changed = false;
       if (changes[SNAPSHOT_KEY]) {
         state.snapshot = changes[SNAPSHOT_KEY].newValue || null;
+        StudylogDateRules.sanitizeSnapshot(state.snapshot);
         changed = true;
       }
       if (changes[PREFS_KEY]) {
         state.prefs = normalizePreferences(changes[PREFS_KEY].newValue || {});
+        $("#show-portal-schedule-memo").checked = state.prefs.showPortalScheduleMemo;
         if (!pageExists(state.view)) state.view = state.prefs.startPageId;
         changed = true;
       }
@@ -2538,6 +2559,7 @@
   async function initialize() {
     const stored = await storageGet([SNAPSHOT_KEY, PREFS_KEY]);
     state.snapshot = stored[SNAPSHOT_KEY] || null;
+    if (StudylogDateRules.sanitizeSnapshot(state.snapshot)) await storageSet({ [SNAPSHOT_KEY]: state.snapshot });
     state.prefs = normalizePreferences(stored[PREFS_KEY] || {});
     state.view = state.prefs.startPageId;
     const requestedView = new URLSearchParams(location.search).get("view");

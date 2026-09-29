@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Studylog Bridge",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "icons": { "16": "icons/studylog-16.png", "32": "icons/studylog-32.png", "48": "icons/studylog-48.png", "128": "icons/studylog-128.png" },
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsTKMloN4iY3Bmu/jo6NWheeZ4CNqqlRPD3g4w4nzOyGxNsiGROwsOfrlPwlwVOV06yHV3w4qSc1p2UO6X/b0pcKy4TgM12SusMohd2rVbCdhiNCWCjfC5f8h0wSOiPBFT2beu3brqiLdIp5WW2Er3N9i5mLAVetwx12r84IVHLlKNI7yA/6D1moCY+uU3d2175MzezNEBiW3W3CckR64FtRoMu4jaBYfN08GlEU59d+E9sYcm8olUEvR6c9pn1rTG6r0btjpkDnUPqUxny26xbxMks7HBDM1f5HYj7xKABbQyqGxqFUJ/a+VuUZgOkFS0SFBDT895QkjRFW55Qdt1QIDAQAB",
   "description": "スタログの学習情報を表示し、自由に構成できるカスタムページをダッシュボードで確認します。",
@@ -23,8 +23,8 @@
         "https://portal.iwasaki.ac.jp/lms/*",
         "https://portal.iwasaki.ac.jp/portal/lmsinc/*"
       ],
-      "js": ["attendance-rules.js", "attendance-watch-rules.js", "digest-rules.js", "task-rules.js", "auto-sync-rules.js", "content.js"],
-      "css": ["content.css"],
+      "js": ["date-rules.js", "attendance-rules.js", "attendance-watch-rules.js", "digest-rules.js", "task-rules.js", "auto-sync-rules.js", "content.js", "iportal-api.js", "iportal.js", "iportal-inline.js"],
+      "css": ["content.css", "iportal-inline.css"],
       "run_at": "document_start"
     },
     {

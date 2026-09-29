@@ -1,0 +1,44 @@
+#studylog-iportal-toggle { display: block; line-height: 20px; margin-right: 3px; background: #176b4d; color: #fff; }
+#studylog-iportal-panel {
+  box-sizing: border-box;
+  width: min(860px, calc(100vw - 32px));
+  height: min(580px, calc(100dvh - 48px));
+  max-width: none; max-height: none; margin: auto; padding: 22px;
+  border: 1px solid #dbe3dd; border-radius: 16px;
+  background: #fff; color: #26372e;
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  box-shadow: 0 20px 70px #16291f40;
+}
+#studylog-iportal-panel[open] { display: flex; flex-direction: column; gap: 14px; }
+#studylog-iportal-panel::backdrop { background: #14291f55; }
+#studylog-iportal-panel * { box-sizing: border-box; }
+#studylog-iportal-panel h2, #studylog-iportal-panel p { margin: 0; }
+#studylog-iportal-panel h2 { font-size: 20px; line-height: 1.4; }
+#studylog-iportal-panel button, #studylog-iportal-panel input { font: inherit; }
+#studylog-iportal-panel button { border: 1px solid #dbe3dd; border-radius: 8px; padding: 7px 12px; background: #f5f8f6; color: inherit; cursor: pointer; }
+#studylog-iportal-panel button:disabled { opacity: .55; cursor: wait; }
+#studylog-iportal-panel button:focus-visible, #studylog-iportal-panel input:focus-visible { outline: 2px solid #176b4d; outline-offset: 2px; }
+#studylog-iportal-panel a { color: #176b4d; text-decoration: underline; }
+#studylog-iportal-panel .studylog-iportal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+#studylog-iportal-panel .studylog-iportal-header p { color: #65716a; font-size: 12px; margin-top: 3px; }
+#studylog-iportal-panel [data-close] { border: 0; background: transparent; font-size: 24px; line-height: 1; padding: 3px 6px; }
+#studylog-iportal-panel .portal-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+#studylog-iportal-panel .portal-toolbar label { margin: 0; font-weight: normal; white-space: nowrap; }
+#studylog-iportal-panel input[type="search"] { flex: 1; min-width: 130px; padding: 7px 10px; border: 1px solid #dbe3dd; border-radius: 8px; background: #fff; color: inherit; }
+#studylog-iportal-panel [data-iportal="status"] { color: #65716a; font-size: 12px; }
+#studylog-iportal-panel .portal-columns { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 16px; min-height: 0; flex: 1; }
+#studylog-iportal-panel .portal-columns > section, #studylog-iportal-panel .portal-detail { overflow: auto; min-height: 0; overscroll-behavior: contain; }
+#studylog-iportal-panel [data-iportal="articles"] { display: grid; gap: 8px; padding: 2px; }
+#studylog-iportal-panel .portal-item { width: 100%; text-align: left; padding: 12px; background: #fff; overflow-wrap: anywhere; }
+#studylog-iportal-panel .portal-item[aria-current="true"] { border-color: #176b4d; background: #eff7f2; }
+#studylog-iportal-panel .portal-item strong, #studylog-iportal-panel .portal-item small { display: block; white-space: pre-line; }
+#studylog-iportal-panel .portal-item small { margin-top: 5px; color: #65716a; font-size: 11px; }
+#studylog-iportal-panel .portal-detail { padding: 14px; border-radius: 10px; background: #f5f8f6; overflow-wrap: anywhere; }
+#studylog-iportal-panel .portal-detail h2 { white-space: pre-line; font-size: 17px; margin-bottom: 6px; }
+#studylog-iportal-panel .portal-detail > p { color: #65716a; font-size: 12px; }
+#studylog-iportal-panel .portal-body { white-space: pre-wrap; line-height: 1.8; margin-top: 16px; }
+#studylog-iportal-panel .portal-attachments { display: grid; gap: 8px; margin: 16px 0; }
+@media (max-width: 600px) {
+  #studylog-iportal-panel { padding: 16px; height: calc(100dvh - 32px); }
+  #studylog-iportal-panel .portal-columns { grid-template-columns: 1fr; grid-template-rows: minmax(80px, 1fr) minmax(0, 2fr); }
+}

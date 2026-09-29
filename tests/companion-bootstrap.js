@@ -75,6 +75,7 @@
     script.addEventListener("load", resolve, { once: true });
     document.head.append(script);
   });
+  await loadScript("/date-rules.js");
   await loadScript("/attendance-rules.js");
   await loadScript("/attendance-watch-rules.js");
   await loadScript("/digest-rules.js");

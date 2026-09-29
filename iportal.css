@@ -1,0 +1,15 @@
+.portal-reader { max-width: 1240px; margin: auto; padding: 32px; }
+.portal-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 20px; }
+.portal-toolbar input[type="search"] { padding: 9px; max-width: 100%; }
+.portal-columns { display: grid; grid-template-columns: minmax(240px, 1fr) minmax(0, 2fr); gap: 24px; align-items: start; }
+[data-iportal="articles"] { display: grid; gap: 10px; }
+.portal-item { width: 100%; text-align: left; padding: 16px; border: 1px solid var(--border, #ddd); border-radius: 12px; background: var(--surface, #fff); color: inherit; cursor: pointer; }
+.portal-item[aria-current="true"] { outline: 2px solid #3157d5; }
+.portal-item strong, .portal-item small { display: block; white-space: pre-line; }
+.portal-item small { margin-top: 8px; opacity: .75; }
+.portal-detail { padding: 24px; overflow-wrap: anywhere; }
+.portal-detail h2 { white-space: pre-line; }
+.portal-body { white-space: pre-wrap; line-height: 1.9; }
+.portal-attachments { display: grid; gap: 12px; margin-top: 24px; }
+[data-iportal="status"] { min-height: 1.5em; margin: 20px 0; }
+@media (max-width: 700px) { .portal-reader { padding: 16px; } .portal-columns { grid-template-columns: 1fr; } }

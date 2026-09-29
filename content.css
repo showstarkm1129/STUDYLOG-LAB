@@ -76,7 +76,13 @@
   font-size: 12px;
 }
 
-#studylog-course-navigation-date { font: inherit; color: var(--studylog-ink); }
+#studylog-course-navigation-date { font: inherit; }
+#studylog-course-navigation-date,
+#studylog-course-navigation-date option {
+  color-scheme: light;
+  background: #fff;
+  color: var(--studylog-ink);
+}
 #studylog-course-navigation-choice:not([hidden]) { display: block; }
 #studylog-course-navigation { margin-top: 12px; border-top: 1px solid var(--studylog-line); padding-top: 12px; }
 #studylog-course-navigation > :last-child { margin-bottom: 0; }
@@ -255,6 +261,17 @@
 #studylog-bridge-panel .studylog-context-task-actions > button { color: #6745a8; font-size: 10px; padding: 5px 7px; }
 .studylog-context-task a { color: var(--studylog-green); flex: 0 0 auto; font-size: 11px; font-weight: 700; text-decoration: none; }
 .studylog-context-line > strong { font-size: 12px; }
+.studylog-context-course-link {
+  background: #fff;
+  border: 1px solid var(--studylog-green);
+  border-radius: 7px;
+  color: var(--studylog-green);
+  flex: 0 0 auto;
+  font-size: 11px;
+  padding: 5px 8px;
+  text-decoration: none;
+}
+.studylog-context-course-link:hover { background: #e4f2e9; }
 .studylog-context-list-summary { background: #f7f9f7; color: var(--studylog-muted); font-size: 10px; padding: 6px 10px; text-align: right; }
 .studylog-context-empty { color: var(--studylog-muted); padding: 3px 1px; }
 .studylog-context-warning { background: #fff4d6; border-radius: 8px; color: #765210; padding: 8px 10px; }
@@ -473,3 +490,110 @@
 #studylog-quiz-inspector-panel footer .studylog-quiz-save-experiment { background: #2855c7; border-color: #2855c7; color: #fff; }
 #studylog-quiz-inspector-panel footer .studylog-quiz-save-experiment:hover { background: #1f46aa; }
 #studylog-quiz-inspector-message { color: var(--studylog-lab-muted); font-size: 10px; margin: 0; padding: 2px 16px 12px; }
+
+html:not([data-studylog-show-portal-schedule-memo]) .week-data a[href*="/lms/schedule/form/"] { display: none !important; }
+
+.studylog-memo-button {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  margin: 2px 0 2px 6px;
+  padding: 4px;
+  border: 1px solid #dbe3dd;
+  border-radius: 7px;
+  background: #fff;
+  color: #65716a;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+.studylog-memo-button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; pointer-events: none; }
+.studylog-memo-button:hover { background: #eef5f0; color: #176b4d; border-color: #176b4d; }
+.studylog-memo-button:focus-visible { outline: 2px solid #176b4d; outline-offset: 2px; }
+.studylog-memo-course-row {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.studylog-memo-course-row > a { display: block; width: 100%; min-width: 0; max-height: none !important; overflow-wrap: anywhere; }
+.studylog-memo-course-row > .studylog-memo-button { flex: 0 0 auto; gap: 6px; width: auto; min-width: 72px; max-width: 100%; height: auto; min-height: 44px; margin: 0; padding: 6px 10px; float: none; color: #176b4d; font: 12px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.week-data > .studylog-memo-button { width: 22px; height: 22px; margin: 0 0 0 5px; padding: 2px; }
+.studylog-memo-day-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 8px 0; color: #65716a; font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+
+#studylog-quick-memo {
+  position: fixed;
+  inset: auto;
+  z-index: 2147483647;
+  width: min(360px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  overflow: auto;
+  margin: 0;
+  padding: 16px;
+  box-sizing: border-box;
+  border: 1px solid #c7d9ce;
+  border-radius: 14px;
+  background: #fff;
+  color: #15231d;
+  color-scheme: light;
+  box-shadow: 0 12px 40px rgba(20, 34, 28, .22);
+  font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+#studylog-quick-memo *, #studylog-quick-memo *::before, #studylog-quick-memo *::after { box-sizing: border-box; }
+#studylog-quick-memo [hidden], #studylog-quick-memo[hidden] { display: none !important; }
+#studylog-quick-memo header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+#studylog-quick-memo header small { color: #176b4d; font-size: 11px; }
+#studylog-quick-memo h2 { margin: 2px 0 0; font-size: 18px; font-weight: 700; line-height: 1.4; overflow-wrap: anywhere; }
+#studylog-quick-memo button { border: 1px solid #dbe3dd; border-radius: 7px; background: #fff; color: #176b4d; padding: 5px 10px; font: inherit; cursor: pointer; }
+#studylog-quick-memo button:hover { background: #eef5f0; }
+#studylog-quick-memo button:focus-visible, #studylog-quick-memo textarea:focus-visible, #studylog-quick-memo summary:focus-visible { outline: 2px solid #176b4d; outline-offset: 2px; }
+#studylog-quick-memo header button { padding: 0 6px; border: 0; color: #65716a; font-size: 22px; }
+#studylog-quick-memo .studylog-memo-modes { display: flex; gap: 6px; margin-bottom: 10px; }
+#studylog-quick-memo button[aria-pressed="true"] { background: #176b4d; border-color: #176b4d; color: #fff; }
+#studylog-quick-memo textarea { display: block; width: 100%; min-height: 180px; max-height: 40vh; resize: vertical; padding: 10px; border: 1px solid #c7d9ce; border-radius: 8px; background: #fbfdfb; color: #15231d; font: inherit; line-height: 1.65; }
+#studylog-quick-memo textarea::placeholder { color: #7e8a83; }
+#studylog-quick-memo .studylog-memo-preview { min-height: 100px; max-height: 40vh; overflow: auto; overflow-wrap: anywhere; padding: 2px 0 10px; text-align: center; }
+#studylog-quick-memo .studylog-memo-preview p { margin: 0 0 5px; white-space: pre-wrap; }
+#studylog-quick-memo .studylog-memo-preview h1, #studylog-quick-memo .studylog-memo-preview h2, #studylog-quick-memo .studylog-memo-preview h3 { margin: 8px 0 6px; font-size: 19px; line-height: 1.4; }
+#studylog-quick-memo .studylog-memo-preview h2 { font-size: 17px; }
+#studylog-quick-memo .studylog-memo-preview h3 { font-size: 15px; }
+#studylog-quick-memo .studylog-memo-preview ul, #studylog-quick-memo .studylog-memo-preview ol { width: fit-content; max-width: 100%; margin: 6px auto; padding-left: 24px; text-align: left; }
+#studylog-quick-memo .studylog-memo-preview li { margin: 3px 0; }
+#studylog-quick-memo .studylog-memo-preview .studylog-memo-task { list-style: none; margin-left: -20px; display: flex; align-items: baseline; gap: 6px; }
+#studylog-quick-memo .studylog-memo-task input { margin: 0; accent-color: #176b4d; }
+#studylog-quick-memo code { border-radius: 4px; padding: 1px 4px; background: #eef5f0; color: #245340; font-size: 12px; }
+#studylog-quick-memo .studylog-memo-preview pre { width: fit-content; max-width: 100%; margin: 6px auto; overflow: auto; padding: 10px; border-radius: 8px; background: #eef5f0; text-align: left; }
+#studylog-quick-memo pre code { padding: 0; }
+#studylog-quick-memo .studylog-memo-preview blockquote { width: fit-content; max-width: 100%; margin: 6px auto; border-left: 3px solid #a3c7b2; padding-left: 10px; color: #65716a; }
+#studylog-quick-memo a { color: #176b4d; text-decoration: underline; }
+#studylog-quick-memo .studylog-memo-empty { color: #65716a; }
+#studylog-quick-memo details { margin-top: 10px; color: #65716a; font-size: 11px; }
+#studylog-quick-memo summary { cursor: pointer; }
+#studylog-quick-memo details p { margin: 6px 0; line-height: 1.9; }
+#studylog-quick-memo footer {
+  /* スタログのページ用footer（絶対配置・全幅・固定高）をメモ内では通常の流れに戻す。 */
+  position: static;
+  width: auto;
+  height: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  border-top: 1px solid #dbe3dd;
+  margin: 12px 0 0;
+  padding-top: 10px;
+}
+#studylog-quick-memo .studylog-memo-footer-info { display: grid; gap: 3px; flex: 1 1 auto; min-width: 0; margin-right: auto; text-align: left; }
+#studylog-quick-memo .studylog-memo-scope { color: #65716a; font-size: 11px; overflow-wrap: anywhere; }
+#studylog-quick-memo .studylog-memo-save-status { display: inline-flex; align-items: center; justify-content: flex-start; gap: 6px; width: 22px; height: 22px; color: #176b4d; }
+#studylog-quick-memo .studylog-memo-status-icon { font: 700 17px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+#studylog-quick-memo .studylog-memo-save-status[data-state="attention"] { color: #9b6a12; }
+#studylog-quick-memo .studylog-memo-save-status[data-state="attention"] .studylog-memo-status-icon { width: 16px; height: 16px; border: 1.5px solid currentColor; border-radius: 50%; font-size: 12px; line-height: 14px; text-align: center; }
+#studylog-quick-memo .studylog-memo-status-text { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }

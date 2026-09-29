@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>iPORTALの記事 · Studylog</title>
+  <link rel="icon" href="icons/studylog-32.png">
+  <link rel="stylesheet" href="dashboard.css">
+  <link rel="stylesheet" href="iportal.css">
+</head>
+<body>
+  <main class="portal-reader">
+    <header class="page-header">
+      <div><p class="eyebrow">STUDYLOG</p><h1>iPORTALの記事</h1><p>記事を開くとiPORTAL側も既読になります。</p></div>
+      <a class="secondary-button" href="dashboard.html">ダッシュボード</a>
+    </header>
+    <div class="portal-toolbar">
+      <button data-iportal="refresh" class="primary-button" type="button">再取得</button>
+      <label><input data-iportal="unread-only" type="checkbox" checked> 未読のみ</label>
+      <label>検索 <input data-iportal="search" type="search" placeholder="タイトル・本文" maxlength="200"></label>
+      <a href="https://portal.iwasaki.ac.jp/lms/" target="_blank" rel="noopener noreferrer">ログイン</a>
+    </div>
+    <p data-iportal="status" role="status" aria-live="polite">記事を取得します。</p>
+    <div class="portal-columns">
+      <section aria-label="記事一覧"><div data-iportal="articles"></div></section>
+      <article class="card portal-detail" data-iportal="detail" aria-label="記事本文" tabindex="-1">
+        <p>一覧から記事を選んでください。</p>
+      </article>
+    </div>
+    <p class="help-text">記事はこの画面を閉じると破棄します。取得だけでは既読にしません。ログインが切れた場合は、ログイン後に再取得してください。</p>
+  </main>
+  <script src="iportal-api.js"></script>
+  <script src="iportal.js"></script>
+</body>
+</html>

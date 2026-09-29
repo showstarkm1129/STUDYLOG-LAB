@@ -1,0 +1,35 @@
+const assert = require('node:assert/strict');
+const api = require('../iportal-api.js');
+const record = { infoCode: '123', eventCode: '100123', infoTitle: '<script>test</script>', infoDescription: '本文', viewDateTime: null, pastinfo: '0', attachedFile1: '資料 & 1.pdf' };
+const payload = (records) => ({ result: 'success', records });
+(async () => {
+  const parsed = api.parseList(payload([record]));
+  assert.equal(parsed[0].unread, true);
+  assert.equal(parsed[0].title, record.infoTitle);
+  assert.equal(new URL(parsed[0].attachments[0].url).searchParams.get('fn'), record.attachedFile1);
+  assert.equal(api.parseList(payload([{ ...record, pastinfo: '1' }]))[0].unread, false);
+  assert.equal(api.parseList(payload([{ ...record, viewDateTime: '20260929' }]))[0].unread, false);
+  assert.throws(() => api.parseList({ result: 'error' }));
+  assert.throws(() => api.parseList(payload([{ infoCode: '123' }])));
+  const calls = [];
+  let read = false;
+  global.fetch = async (url, options) => {
+    calls.push({ url, options });
+    const type = new URL(url).searchParams.get('type');
+    if (type === 'infoviewupdate') read = true;
+    return { ok: true, json: async () => payload([{ ...record, viewDateTime: read ? '20260929' : null }]) };
+  };
+  await api.list();
+  assert.equal(read, false, '一覧取得は既読にしない');
+  assert.equal((await api.markRead('123'))[0].unread, false);
+  assert.deepEqual(calls.map(({url}) => new URL(url).searchParams.get('type')), ['infolistJ', 'infoviewupdate', 'infolistJ']);
+  assert(calls.every(({options}) => options.credentials === 'include' && options.cache === 'no-store' && options.redirect === 'error'));
+  await assert.rejects(api.markRead('123&other=1'));
+  global.fetch = async () => ({ ok: true, json: async () => payload([record]) });
+  await assert.rejects(api.markRead('123'), /反映を確認できません/);
+  global.fetch = async () => ({ ok: true, json: async () => { throw new Error('HTML login'); } });
+  await assert.rejects(api.list(), /ログイン/);
+  global.fetch = async () => ({ ok: false });
+  await assert.rejects(api.list(), /通信に失敗/);
+  console.log('iPORTAL smoke passed');
+})().catch((error) => { console.error(error); process.exitCode = 1; });

@@ -28,6 +28,7 @@
 
         <div class="sidebar-foot">
           <div class="privacy-note"><span aria-hidden="true">●</span> データはこの端末内だけ</div>
+          <button class="quiet-button full-width" id="open-display-settings-dialog" type="button">表示設定</button>
           <button class="quiet-button full-width" id="open-attendance-watch-dialog" type="button">出席確認の見張り</button>
           <button class="quiet-button full-width" id="open-connection-dialog" type="button">サービス連携</button>
           <button class="quiet-button full-width" id="open-data-dialog" type="button">データ管理</button>
@@ -76,6 +77,23 @@
         </div>
         <p class="help-text">読み込んだJSONは <code>chrome.storage.local</code> に保存します。外部通信は行いません。</p>
       </form>
+    </dialog>
+
+    <dialog id="display-settings-dialog" class="modal" aria-labelledby="display-settings-title">
+      <div class="modal-card">
+        <header>
+          <div>
+            <p class="eyebrow">DISPLAY</p>
+            <h2 id="display-settings-title">表示設定</h2>
+          </div>
+          <button class="icon-button" data-close-dialog="display-settings-dialog" type="button" aria-label="閉じる">×</button>
+        </header>
+        <label class="attendance-watch-toggle">
+          <input id="show-portal-schedule-memo" type="checkbox">
+          <span><strong>スタログ標準のメモボタンを表示する</strong><small>カレンダーの日付・曜日の右にある、スタログ標準のメモボタンを表示します。</small></span>
+        </label>
+        <p class="help-text">変更は自動保存され、開いているスタログのカレンダーにも反映されます。</p>
+      </div>
     </dialog>
 
     <dialog id="attendance-watch-dialog" class="modal wide-modal">
@@ -178,6 +196,7 @@
       </div>
     </template>
 
+    <script src="date-rules.js"></script>
     <script src="attendance-rules.js"></script>
     <script src="attendance-watch-rules.js"></script>
     <script src="dashboard-icons.js"></script>
