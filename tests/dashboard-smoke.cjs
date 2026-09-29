@@ -52,7 +52,7 @@ let browser;
     localStorage.setItem("studylogBridgeSnapshotV1", JSON.stringify(data));
   }, snapshot);
   await page.goto(`http://127.0.0.1:${port}/dashboard.html?now=2026-07-29T09:30:00`, { waitUntil: "networkidle" });
-  await page.waitForSelector("[data-next-course-card]");
+  await page.waitForSelector("[data-dashboard-card='next-course']");
   const featureInfoKeys = new Set();
   async function collectFeatureInfo() {
     const entries = await page.locator("[data-feature-info]").evaluateAll((items) => items.map((item) => {
@@ -87,7 +87,7 @@ let browser;
   assert.doesNotMatch(homeText, /欠席余裕2回以下|出席アラート/);
   assert.equal(await page.locator(".list-row.is-unit-exam").count(), 0, "home should not mount the deferred lesson insights");
   const todayCourseIds = snapshot.timetableSlots.filter((slot) => slot.date === "2026-07-29").map((slot) => String(slot.classId));
-  const todayCandidateIds = await page.locator("[data-today-candidates] [data-manual-toggle]").evaluateAll((items) => items.map((item) => item.dataset.manualToggle.split("::")[0]));
+  const todayCandidateIds = await page.locator("[data-dashboard-card='next-candidates'] [data-report-key]").evaluateAll((items) => items.map((item) => item.dataset.reportKey.split("::")[0]));
   assert(todayCandidateIds.every((classId) => todayCourseIds.includes(classId)), "home candidates must belong to today's courses");
   assert.equal(await page.locator("[data-open-completion-settings]").count(), 0, "home should not mount the deferred completion insights");
 
@@ -127,7 +127,7 @@ let browser;
   await page.click('[data-task-filter="manual"]');
   assert((await page.locator(".task-row").count()) >= 1, "manual completion should be reversible");
   await page.click('[data-view="home"]');
-  assert.equal(await page.locator("[data-today-candidates] [data-manual-toggle]").evaluateAll((items, key) => items.filter((item) => item.dataset.manualToggle === key).length, manuallyCompletedKey), 0, "checked tasks must not appear in today's candidates");
+  assert.equal(await page.locator("[data-dashboard-card='next-candidates'] [data-report-key]").evaluateAll((items, key) => items.filter((item) => item.dataset.reportKey === key).length, manuallyCompletedKey), 0, "checked tasks must not appear in today's candidates");
 
   await page.click('[data-view="attendance"]');
   const rateBefore = await page.locator("#sim-rate").textContent();
@@ -162,12 +162,12 @@ let browser;
   assert.equal(await page.locator("#data-dialog").evaluate((dialog) => dialog.open), false, "data dialog should close from a backdrop click");
 
   await page.goto(`http://127.0.0.1:${port}/dashboard.html?now=2026-07-29T08:30:00`, { waitUntil: "networkidle" });
-  await page.waitForSelector(".next-course-card.is-unit-exam");
-  assert.match(await page.locator(".next-course-card.is-unit-exam").innerText(), /重要：単位認定試験[\s\S]*Webアプリ基礎S/);
+  await page.waitForSelector("[data-dashboard-card='next-course']:has(.is-unit-exam)");
+  assert.match(await page.locator("[data-dashboard-card='next-course']:has(.is-unit-exam)").innerText(), /重要：単位認定試験[\s\S]*Webアプリ基礎S/);
 
   await page.goto(`http://127.0.0.1:${port}/dashboard.html?now=2026-07-29T23:00:00`, { waitUntil: "networkidle" });
-  await page.waitForSelector("[data-next-course-card]");
-  const noNextCourseText = await page.locator("[data-next-course-card]").innerText();
+  await page.waitForSelector("[data-dashboard-card='next-course']");
+  const noNextCourseText = await page.locator("[data-dashboard-card='next-course']").innerText();
   assert.match(noNextCourseText, /次の授業はありません/);
   assert.doesNotMatch(noNextCourseText, /今日の授業は終了/);
 

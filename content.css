@@ -5,6 +5,10 @@
   --studylog-green: #176b4d;
   --studylog-soft: #eef5f0;
   position: fixed;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  max-height: calc(100vh - 36px);
   right: 18px;
   bottom: 18px;
   z-index: 2147483647;
@@ -19,52 +23,83 @@
 #studylog-bridge-root *::after { box-sizing: border-box; }
 
 #studylog-bridge-toggle {
+  flex-shrink: 0;
   align-items: center;
-  background: #17251f;
-  border: 1px solid rgba(255, 255, 255, .18);
-  border-radius: 999px;
+  background: #fff5dd;
+  border: 1px solid rgba(35, 85, 72, .16);
+  border-radius: 50%;
   box-shadow: 0 5px 20px rgba(20, 34, 28, .28);
   color: #fff;
   cursor: pointer;
   display: flex;
   font: inherit;
   font-weight: 700;
-  gap: 8px;
-  max-width: 360px;
-  padding: 9px 14px 9px 9px;
-}
-
-#studylog-bridge-toggle > span:last-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.studylog-context-dot {
-  align-items: center;
-  background: #d9f06f;
-  border-radius: 50%;
-  color: #17251f;
-  display: inline-flex;
-  flex: 0 0 26px;
-  font-size: 12px;
-  height: 26px;
   justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+}
+
+#studylog-bridge-toggle:hover { box-shadow: 0 5px 20px rgba(20, 34, 28, .4); }
+#studylog-bridge-toggle:focus-visible { outline: 3px solid #176b4d; outline-offset: 3px; }
+
+#studylog-bridge-root .studylog-course-shortcut:not([hidden]) {
+  display: block;
+  flex-shrink: 0;
+  width: 100%;
+  margin: 0 0 8px;
+  padding: 10px 14px;
+  border: 1px solid #176b4d;
+  border-radius: 12px;
+  background: #eef5f0;
+  color: #176b4d;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+#studylog-bridge-root .studylog-course-shortcut:hover { background: #dbece0; }
+#studylog-bridge-root .studylog-course-shortcut:focus-visible { outline: 3px solid #176b4d; outline-offset: 3px; }
+
+#studylog-course-navigation-status,
+#studylog-course-navigation-choice {
+  flex-shrink: 0;
+  max-width: min(360px, calc(100vw - 36px));
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--studylog-line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--studylog-muted);
+  font: inherit;
+  font-size: 12px;
+}
+
+#studylog-course-navigation-date { font: inherit; color: var(--studylog-ink); }
+#studylog-course-navigation-choice:not([hidden]) { display: block; }
+#studylog-course-navigation { margin-top: 12px; border-top: 1px solid var(--studylog-line); padding-top: 12px; }
+#studylog-course-navigation > :last-child { margin-bottom: 0; }
+
+.studylog-context-icon {
+  display: block;
+  border-radius: 50%;
+  width: 100%;
+  height: 100%;
 }
 
 #studylog-bridge-panel {
   background: #fff;
   border: 1px solid var(--studylog-line);
   border-radius: 16px;
-  bottom: 54px;
   box-shadow: 0 14px 42px rgba(20, 34, 28, .24);
   color: var(--studylog-ink);
   display: none;
   max-height: min(680px, calc(100vh - 96px));
+  min-height: 0;
+  margin-bottom: 10px;
   overflow: auto;
   padding: 16px;
-  position: absolute;
-  right: 0;
   width: min(390px, calc(100vw - 36px));
 }
 

@@ -72,7 +72,7 @@ const server = http.createServer((request, response) => {
   const visit = async (route, expectedTitle) => {
     await page.goto(`http://127.0.0.1:${port}${route}`);
     await page.waitForSelector("#studylog-bridge-root");
-    await page.waitForFunction(() => !document.querySelector("#studylog-bridge-toggle")?.textContent.includes("読み込み中"));
+    await page.waitForFunction(() => document.querySelector("#studylog-bridge-root")?.dataset.ready === "true");
     assert.equal(await page.locator("#studylog-context-title").textContent(), expectedTitle);
     assert.equal(await page.locator("body").getAttribute("data-page-mode"), "normal");
   };
@@ -111,7 +111,7 @@ const server = http.createServer((request, response) => {
   await visit("/lms/schedule/", "時間割");
   await visit("/portal/lmsinc/sMyPage.php", "課題状況");
   assert.match(await page.locator("#studylog-context-body").innerText(), /スタログ上の未完了/);
-  const compactBefore = await page.locator("#studylog-bridge-toggle").innerText();
+  const compactBefore = await page.locator("#studylog-bridge-toggle").getAttribute("title");
   await page.locator("#studylog-bridge-toggle").click();
   await page.mouse.click(5, 5);
   assert.notEqual(await page.locator("#studylog-bridge-panel").getAttribute("data-open"), "true", "companion should close from an outside click");
@@ -119,16 +119,16 @@ const server = http.createServer((request, response) => {
   await page.waitForFunction(() => document.querySelector("#studylog-bridge-panel")?.dataset.open === "true");
   await page.locator("[data-context-manual]").first().click();
   await page.waitForFunction(() => document.body.dataset.manualCompleted === "1");
-  assert.notEqual(await page.locator("#studylog-bridge-toggle").innerText(), compactBefore);
+  assert.notEqual(await page.locator("#studylog-bridge-toggle").getAttribute("title"), compactBefore);
   assert.equal(await page.locator('[data-context-manual][data-checked="true"]').count(), 1);
   if (screenshotPath) await page.screenshot({ path: screenshotPath.replace(/(\.png)?$/, "-checked.png"), fullPage: true });
   await page.locator('[data-context-manual][data-checked="true"]').click();
   await page.waitForFunction(() => document.body.dataset.manualCompleted === "0");
   assert.equal(await page.locator('[data-context-manual][data-checked="true"]').count(), 0);
-  assert.equal(await page.locator("#studylog-bridge-toggle").innerText(), compactBefore);
+  assert.equal(await page.locator("#studylog-bridge-toggle").getAttribute("title"), compactBefore);
 
   await visit("/lms/class/10183/", "科目の状況");
-  assert.match(await page.locator("#studylog-bridge-toggle").innerText(), /Javaプログラミング/);
+  assert.match(await page.locator("#studylog-bridge-toggle").getAttribute("title"), /Javaプログラミング/);
   await visit("/lms/class/10183/153094/", "この授業回");
   await page.waitForFunction(() => document.querySelectorAll(".studylog-inline-task-control").length === 2);
   const inlineLayout = await page.locator(".studylog-inline-task-control").first().evaluate((element) => {

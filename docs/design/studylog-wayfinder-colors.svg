@@ -1,0 +1,179 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="868" viewBox="0 0 1200 868"><defs><symbol id="a0" viewBox="0 0 80 80">
+      <circle cx="40" cy="40" r="40" fill="#172e26"/>
+      <path d="M40 14v53" stroke="#d9f06f" stroke-width="4.5" stroke-linecap="round"/>
+      <path d="M21 21h33l9 9-9 9H21Z" fill="#d9f06f"/>
+      <path d="M58 44H28l-9 8 9 8h30Z" fill="#172e26" stroke="#d9f06f" stroke-width="3.5" stroke-linejoin="round"/>
+      <circle cx="31" cy="30" r="3" fill="#172e26"/>
+    </symbol>
+<symbol id="c0" viewBox="0 0 80 80">
+      <circle cx="40" cy="40" r="40" fill="#172e26"/>
+      <path d="M40 14v53" stroke="#d9f06f" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="M21 21h33l9 9-9 9H21Zm38 23H27l-9 8 9 8h32Z" fill="#172e26" stroke="#d9f06f" stroke-width="3.5" stroke-linejoin="round"/>
+    </symbol>
+<symbol id="a1" viewBox="0 0 80 80">
+      <circle cx="40" cy="40" r="40" fill="#182c4d"/>
+      <path d="M40 14v53" stroke="#b9deff" stroke-width="4.5" stroke-linecap="round"/>
+      <path d="M21 21h33l9 9-9 9H21Z" fill="#b9deff"/>
+      <path d="M58 44H28l-9 8 9 8h30Z" fill="#182c4d" stroke="#b9deff" stroke-width="3.5" stroke-linejoin="round"/>
+      <circle cx="31" cy="30" r="3" fill="#182c4d"/>
+    </symbol>
+<symbol id="c1" viewBox="0 0 80 80">
+      <circle cx="40" cy="40" r="40" fill="#182c4d"/>
+      <path d="M40 14v53" stroke="#b9deff" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="M21 21h33l9 9-9 9H21Zm38 23H27l-9 8 9 8h32Z" fill="#182c4d" stroke="#b9deff" stroke-width="3.5" stroke-linejoin="round"/>
+    </symbol>
+<symbol id="a2" viewBox="0 0 80 80">
+      <circle cx="40" cy="40" r="40" fill="#124d4c"/>
+      <path d="M40 14v53" stroke="#a9f2df" stroke-width="4.5" stroke-linecap="round"/>
+      <path d="M21 21h33l9 9-9 9H21Z" fill="#a9f2df"/>
+      <path d="M58 44H28l-9 8 9 8h30Z" fill="#124d4c" stroke="#a9f2df" stroke-width="3.5" stroke-linejoin="round"/>
+      <circle cx="31" cy="30" r="3" fill="#124d4c"/>
+    </symbol>
+<symbol id="c2" viewBox="0 0 80 80">
+      <circle cx="40" cy="40" r="40" fill="#124d4c"/>
+      <path d="M40 14v53" stroke="#a9f2df" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="M21 21h33l9 9-9 9H21Zm38 23H27l-9 8 9 8h32Z" fill="#124d4c" stroke="#a9f2df" stroke-width="3.5" stroke-linejoin="round"/>
+    </symbol>
+<symbol id="a3" viewBox="0 0 80 80">
+      <circle cx="40" cy="40" r="40" fill="#35254f"/>
+      <path d="M40 14v53" stroke="#e6d8ff" stroke-width="4.5" stroke-linecap="round"/>
+      <path d="M21 21h33l9 9-9 9H21Z" fill="#e6d8ff"/>
+      <path d="M58 44H28l-9 8 9 8h30Z" fill="#35254f" stroke="#e6d8ff" stroke-width="3.5" stroke-linejoin="round"/>
+      <circle cx="31" cy="30" r="3" fill="#35254f"/>
+    </symbol>
+<symbol id="c3" viewBox="0 0 80 80">
+      <circle cx="40" cy="40" r="40" fill="#35254f"/>
+      <path d="M40 14v53" stroke="#e6d8ff" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="M21 21h33l9 9-9 9H21Zm38 23H27l-9 8 9 8h32Z" fill="#35254f" stroke="#e6d8ff" stroke-width="3.5" stroke-linejoin="round"/>
+    </symbol>
+<symbol id="a4" viewBox="0 0 80 80">
+      <circle cx="40" cy="40" r="40" fill="#7c3d2c"/>
+      <path d="M40 14v53" stroke="#ffe8c5" stroke-width="4.5" stroke-linecap="round"/>
+      <path d="M21 21h33l9 9-9 9H21Z" fill="#ffe8c5"/>
+      <path d="M58 44H28l-9 8 9 8h30Z" fill="#7c3d2c" stroke="#ffe8c5" stroke-width="3.5" stroke-linejoin="round"/>
+      <circle cx="31" cy="30" r="3" fill="#7c3d2c"/>
+    </symbol>
+<symbol id="c4" viewBox="0 0 80 80">
+      <circle cx="40" cy="40" r="40" fill="#7c3d2c"/>
+      <path d="M40 14v53" stroke="#ffe8c5" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="M21 21h33l9 9-9 9H21Zm38 23H27l-9 8 9 8h32Z" fill="#7c3d2c" stroke="#ffe8c5" stroke-width="3.5" stroke-linejoin="round"/>
+    </symbol>
+<symbol id="a5" viewBox="0 0 80 80">
+      <circle cx="40" cy="40" r="40" fill="#fff5dd"/>
+      <path d="M40 14v53" stroke="#235548" stroke-width="4.5" stroke-linecap="round"/>
+      <path d="M21 21h33l9 9-9 9H21Z" fill="#235548"/>
+      <path d="M58 44H28l-9 8 9 8h30Z" fill="#fff5dd" stroke="#235548" stroke-width="3.5" stroke-linejoin="round"/>
+      <circle cx="31" cy="30" r="3" fill="#fff5dd"/>
+    </symbol>
+<symbol id="c5" viewBox="0 0 80 80">
+      <circle cx="40" cy="40" r="40" fill="#fff5dd"/>
+      <path d="M40 14v53" stroke="#235548" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="M21 21h33l9 9-9 9H21Zm38 23H27l-9 8 9 8h32Z" fill="#fff5dd" stroke="#235548" stroke-width="3.5" stroke-linejoin="round"/>
+    </symbol></defs><rect width="1200" height="868" rx="26" fill="#f3f3ef"/><g font-family="'Segoe UI','Yu Gothic',sans-serif" fill="#24342b"><text x="30" y="42" font-size="12" font-weight="700" letter-spacing="3">STUDYLOG LAB / COLOR EXPLORATION</text><text x="30" y="86" font-size="28" font-weight="700">同じ道しるべでも、色で表情が変わる。</text><text x="30" y="115" font-size="14" fill="#677269">各配色の左が A、右が C。形を固定して、色の印象を比較しています。</text><g transform="translate(24 142)">
+    <rect width="372" height="338" rx="20" fill="#fff" stroke="#dedfda"/>
+    <text x="22" y="33" font-size="11" letter-spacing="2" fill="#788279">PALETTE 01</text>
+    <text x="22" y="65" font-size="18" font-weight="700">フォレスト × ライム</text>
+    <use href="#a0" x="64" y="91" width="100" height="100"/>
+    <use href="#c0" x="210" y="91" width="100" height="100"/>
+    <text x="114" y="216" text-anchor="middle" font-size="13" font-weight="700">A · 塗りと線</text>
+    <text x="260" y="216" text-anchor="middle" font-size="13" font-weight="700">C · 輪郭のみ</text>
+    <text x="186" y="251" text-anchor="middle" font-size="13" fill="#677269">現在の配色。活動的で、目に留まる。</text>
+    <path d="M22 271h328" stroke="#e7e8e3"/>
+    <use href="#a0" x="26" y="287" width="24" height="24"/>
+    <use href="#c0" x="63" y="287" width="24" height="24"/>
+    <text x="104" y="303" font-size="10" fill="#788279">24 px</text>
+    <circle cx="182" cy="299" r="7" fill="#172e26" stroke="#ddd"/>
+    <text x="194" y="303" font-size="10" fill="#788279">#172E26</text>
+    <circle cx="272" cy="299" r="7" fill="#d9f06f" stroke="#ddd"/>
+    <text x="284" y="303" font-size="10" fill="#788279">#D9F06F</text>
+  </g>
+<g transform="translate(412 142)">
+    <rect width="372" height="338" rx="20" fill="#fff" stroke="#dedfda"/>
+    <text x="22" y="33" font-size="11" letter-spacing="2" fill="#788279">PALETTE 02</text>
+    <text x="22" y="65" font-size="18" font-weight="700">ネイビー × アイスブルー</text>
+    <use href="#a1" x="64" y="91" width="100" height="100"/>
+    <use href="#c1" x="210" y="91" width="100" height="100"/>
+    <text x="114" y="216" text-anchor="middle" font-size="13" font-weight="700">A · 塗りと線</text>
+    <text x="260" y="216" text-anchor="middle" font-size="13" font-weight="700">C · 輪郭のみ</text>
+    <text x="186" y="251" text-anchor="middle" font-size="13" fill="#677269">端正で知的。頼れる案内役の印象。</text>
+    <path d="M22 271h328" stroke="#e7e8e3"/>
+    <use href="#a1" x="26" y="287" width="24" height="24"/>
+    <use href="#c1" x="63" y="287" width="24" height="24"/>
+    <text x="104" y="303" font-size="10" fill="#788279">24 px</text>
+    <circle cx="182" cy="299" r="7" fill="#182c4d" stroke="#ddd"/>
+    <text x="194" y="303" font-size="10" fill="#788279">#182C4D</text>
+    <circle cx="272" cy="299" r="7" fill="#b9deff" stroke="#ddd"/>
+    <text x="284" y="303" font-size="10" fill="#788279">#B9DEFF</text>
+  </g>
+<g transform="translate(800 142)">
+    <rect width="372" height="338" rx="20" fill="#fff" stroke="#dedfda"/>
+    <text x="22" y="33" font-size="11" letter-spacing="2" fill="#788279">PALETTE 03</text>
+    <text x="22" y="65" font-size="18" font-weight="700">ディープティール × ミント</text>
+    <use href="#a2" x="64" y="91" width="100" height="100"/>
+    <use href="#c2" x="210" y="91" width="100" height="100"/>
+    <text x="114" y="216" text-anchor="middle" font-size="13" font-weight="700">A · 塗りと線</text>
+    <text x="260" y="216" text-anchor="middle" font-size="13" font-weight="700">C · 輪郭のみ</text>
+    <text x="186" y="251" text-anchor="middle" font-size="13" fill="#677269">穏やかで清潔。日常に馴染む道具。</text>
+    <path d="M22 271h328" stroke="#e7e8e3"/>
+    <use href="#a2" x="26" y="287" width="24" height="24"/>
+    <use href="#c2" x="63" y="287" width="24" height="24"/>
+    <text x="104" y="303" font-size="10" fill="#788279">24 px</text>
+    <circle cx="182" cy="299" r="7" fill="#124d4c" stroke="#ddd"/>
+    <text x="194" y="303" font-size="10" fill="#788279">#124D4C</text>
+    <circle cx="272" cy="299" r="7" fill="#a9f2df" stroke="#ddd"/>
+    <text x="284" y="303" font-size="10" fill="#788279">#A9F2DF</text>
+  </g>
+<g transform="translate(24 500)">
+    <rect width="372" height="338" rx="20" fill="#fff" stroke="#dedfda"/>
+    <text x="22" y="33" font-size="11" letter-spacing="2" fill="#788279">PALETTE 04</text>
+    <text x="22" y="65" font-size="18" font-weight="700">プラム × ラベンダー</text>
+    <use href="#a3" x="64" y="91" width="100" height="100"/>
+    <use href="#c3" x="210" y="91" width="100" height="100"/>
+    <text x="114" y="216" text-anchor="middle" font-size="13" font-weight="700">A · 塗りと線</text>
+    <text x="260" y="216" text-anchor="middle" font-size="13" font-weight="700">C · 輪郭のみ</text>
+    <text x="186" y="251" text-anchor="middle" font-size="13" fill="#677269">少し個性的。柔らかさと創造性。</text>
+    <path d="M22 271h328" stroke="#e7e8e3"/>
+    <use href="#a3" x="26" y="287" width="24" height="24"/>
+    <use href="#c3" x="63" y="287" width="24" height="24"/>
+    <text x="104" y="303" font-size="10" fill="#788279">24 px</text>
+    <circle cx="182" cy="299" r="7" fill="#35254f" stroke="#ddd"/>
+    <text x="194" y="303" font-size="10" fill="#788279">#35254F</text>
+    <circle cx="272" cy="299" r="7" fill="#e6d8ff" stroke="#ddd"/>
+    <text x="284" y="303" font-size="10" fill="#788279">#E6D8FF</text>
+  </g>
+<g transform="translate(412 500)">
+    <rect width="372" height="338" rx="20" fill="#fff" stroke="#dedfda"/>
+    <text x="22" y="33" font-size="11" letter-spacing="2" fill="#788279">PALETTE 05</text>
+    <text x="22" y="65" font-size="18" font-weight="700">テラコッタ × クリーム</text>
+    <use href="#a4" x="64" y="91" width="100" height="100"/>
+    <use href="#c4" x="210" y="91" width="100" height="100"/>
+    <text x="114" y="216" text-anchor="middle" font-size="13" font-weight="700">A · 塗りと線</text>
+    <text x="260" y="216" text-anchor="middle" font-size="13" font-weight="700">C · 輪郭のみ</text>
+    <text x="186" y="251" text-anchor="middle" font-size="13" fill="#677269">温かく親しみやすい。手帳のような存在。</text>
+    <path d="M22 271h328" stroke="#e7e8e3"/>
+    <use href="#a4" x="26" y="287" width="24" height="24"/>
+    <use href="#c4" x="63" y="287" width="24" height="24"/>
+    <text x="104" y="303" font-size="10" fill="#788279">24 px</text>
+    <circle cx="182" cy="299" r="7" fill="#7c3d2c" stroke="#ddd"/>
+    <text x="194" y="303" font-size="10" fill="#788279">#7C3D2C</text>
+    <circle cx="272" cy="299" r="7" fill="#ffe8c5" stroke="#ddd"/>
+    <text x="284" y="303" font-size="10" fill="#788279">#FFE8C5</text>
+  </g>
+<g transform="translate(800 500)">
+    <rect width="372" height="338" rx="20" fill="#fff" stroke="#dedfda"/>
+    <text x="22" y="33" font-size="11" letter-spacing="2" fill="#788279">PALETTE 06</text>
+    <text x="22" y="65" font-size="18" font-weight="700">アイボリー × フォレスト</text>
+    <use href="#a5" x="64" y="91" width="100" height="100"/>
+    <use href="#c5" x="210" y="91" width="100" height="100"/>
+    <text x="114" y="216" text-anchor="middle" font-size="13" font-weight="700">A · 塗りと線</text>
+    <text x="260" y="216" text-anchor="middle" font-size="13" font-weight="700">C · 輪郭のみ</text>
+    <text x="186" y="251" text-anchor="middle" font-size="13" fill="#677269">明るく軽やか。控えめな学習の相棒。</text>
+    <path d="M22 271h328" stroke="#e7e8e3"/>
+    <use href="#a5" x="26" y="287" width="24" height="24"/>
+    <use href="#c5" x="63" y="287" width="24" height="24"/>
+    <text x="104" y="303" font-size="10" fill="#788279">24 px</text>
+    <circle cx="182" cy="299" r="7" fill="#fff5dd" stroke="#ddd"/>
+    <text x="194" y="303" font-size="10" fill="#788279">#FFF5DD</text>
+    <circle cx="272" cy="299" r="7" fill="#235548" stroke="#ddd"/>
+    <text x="284" y="303" font-size="10" fill="#788279">#235548</text>
+  </g></g></svg>

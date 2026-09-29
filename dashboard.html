@@ -5,13 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
     <title>Studylog Dashboard</title>
+    <link rel="icon" type="image/png" href="icons/studylog-32.png">
     <link rel="stylesheet" href="dashboard.css">
   </head>
   <body>
     <div class="app-shell">
       <aside class="sidebar" aria-label="メインメニュー">
         <div class="brand">
-          <span class="brand-mark" aria-hidden="true">S</span>
+          <img class="brand-mark" src="icons/studylog.svg" alt="" aria-hidden="true">
           <div>
             <strong>Studylog</strong>
             <span>student dashboard</span>
@@ -27,6 +28,8 @@
 
         <div class="sidebar-foot">
           <div class="privacy-note"><span aria-hidden="true">●</span> データはこの端末内だけ</div>
+          <button class="quiet-button full-width" id="open-attendance-watch-dialog" type="button">出席確認の見張り</button>
+          <button class="quiet-button full-width" id="open-connection-dialog" type="button">サービス連携</button>
           <button class="quiet-button full-width" id="open-data-dialog" type="button">データ管理</button>
         </div>
       </aside>
@@ -34,7 +37,8 @@
       <main class="main-content">
         <header class="topbar">
           <button class="icon-button mobile-only" id="menu-toggle" type="button" aria-label="メニューを開く">☰</button>
-          <div class="topbar-title"><strong>学習状況</strong><span id="topbar-freshness">端末内データ</span></div>
+          <div class="topbar-title" id="topbar-default"><strong>学習状況</strong><span id="topbar-freshness">端末内データ</span></div>
+          <div class="topbar-page-header" id="topbar-page-header" aria-live="polite" hidden></div>
           <div class="topbar-actions">
             <span class="local-badge">● 外部送信なし</span>
             <button class="secondary-button" id="topbar-data-button" type="button">データ管理</button>
@@ -72,6 +76,32 @@
         </div>
         <p class="help-text">読み込んだJSONは <code>chrome.storage.local</code> に保存します。外部通信は行いません。</p>
       </form>
+    </dialog>
+
+    <dialog id="attendance-watch-dialog" class="modal wide-modal">
+      <div class="modal-card">
+        <header>
+          <div>
+            <p class="eyebrow">ATTENDANCE WATCH</p>
+            <h2>出席確認の見張り</h2>
+          </div>
+          <button class="icon-button" data-close-dialog="attendance-watch-dialog" type="button" aria-label="閉じる">×</button>
+        </header>
+        <div id="attendance-watch-body"></div>
+      </div>
+    </dialog>
+
+    <dialog id="connection-dialog" class="modal wide-modal">
+      <div class="modal-card">
+        <header>
+          <div>
+            <p class="eyebrow">CONNECTIONS</p>
+            <h2>サービス連携</h2>
+          </div>
+          <button class="icon-button" data-close-dialog="connection-dialog" type="button" aria-label="閉じる">×</button>
+        </header>
+        <div id="connection-dialog-body"></div>
+      </div>
     </dialog>
 
     <dialog id="course-dialog" class="modal wide-modal">
@@ -149,9 +179,12 @@
     </template>
 
     <script src="attendance-rules.js"></script>
+    <script src="attendance-watch-rules.js"></script>
     <script src="dashboard-icons.js"></script>
     <script src="dashboard-layout.js"></script>
     <script src="digest-rules.js"></script>
+    <script src="discord-webhook-rules.js"></script>
+    <script src="slack-link-rules.js"></script>
     <script src="task-rules.js"></script>
     <script src="dashboard.js"></script>
   </body>

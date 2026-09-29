@@ -74,6 +74,9 @@ const server = http.createServer((request, response) => {
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
     assert.deepEqual(counts, { reports: 1, subjects: 1, directories: 1, lessons: 1 }, "one automatic cycle should fetch two summaries and only one course");
+    const collectedSnapshot = await page.evaluate(async () => (await chrome.storage.local.get("studylogBridgeSnapshotV1")).studylogBridgeSnapshotV1);
+    assert.equal(collectedSnapshot.timetableSlots.find((slot) => slot.classId === "10175")?.teacherName, "中山先生", "the timetable should retain its registered teacher");
+    assert.equal(collectedSnapshot.visibleTimetable.find((slot) => slot.classId === "10175")?.teacherName, "中山先生", "the visible timetable should retain its registered teacher");
     const state = await page.evaluate(async () => (await chrome.storage.local.get("studylogBridgeAutoCollectV1")).studylogBridgeAutoCollectV1);
     assert(state.years[2026].reportStatusCollectedAt);
     assert(state.years[2026].subjectStatusCollectedAt);

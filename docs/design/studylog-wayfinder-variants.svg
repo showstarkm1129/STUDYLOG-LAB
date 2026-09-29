@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="830" viewBox="0 0 1000 830">
+  <defs>
+    <symbol id="balanced" viewBox="0 0 80 80">
+      <circle cx="40" cy="40" r="40" fill="#172e26"/>
+      <path d="M40 14v53" stroke="#d9f06f" stroke-width="4.5" stroke-linecap="round"/>
+      <path d="M21 21h33l9 9-9 9H21Z" fill="#d9f06f"/>
+      <path d="M58 44H28l-9 8 9 8h30Z" fill="#172e26" stroke="#d9f06f" stroke-width="3.5" stroke-linejoin="round"/>
+      <circle cx="31" cy="30" r="3" fill="#172e26"/>
+    </symbol>
+    <symbol id="solid" viewBox="0 0 80 80">
+      <circle cx="40" cy="40" r="40" fill="#172e26"/>
+      <path d="M40 14v53" stroke="#d9f06f" stroke-width="5" stroke-linecap="round"/>
+      <path d="M20 21h34l10 9-10 9H20Zm40 23H26l-10 9 10 9h34Z" fill="#d9f06f"/>
+    </symbol>
+    <symbol id="outline" viewBox="0 0 80 80">
+      <circle cx="40" cy="40" r="40" fill="#172e26"/>
+      <path d="M40 14v53" stroke="#d9f06f" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="M21 21h33l9 9-9 9H21Zm38 23H27l-9 8 9 8h32Z" fill="#172e26" stroke="#d9f06f" stroke-width="3.5" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="soft" viewBox="0 0 80 80">
+      <circle cx="40" cy="40" r="40" fill="#172e26"/>
+      <path d="M40 14v53" stroke="#d9f06f" stroke-width="4.5" stroke-linecap="round"/>
+      <path d="M23 21h29q2 0 4 2l7 6q1 1 0 2l-7 6q-2 2-4 2H23q-3 0-3-3V24q0-3 3-3Z" fill="#d9f06f"/>
+      <path d="M56 44H29q-2 0-4 2l-7 6q-1 1 0 2l7 6q2 2 4 2h27q3 0 3-3V47q0-3-3-3Z" fill="#d9f06f"/>
+      <path d="M29 30h13m-4 23h13" stroke="#172e26" stroke-width="3" stroke-linecap="round"/>
+    </symbol>
+  </defs>
+  <rect width="1000" height="830" rx="28" fill="#f2f5ef"/>
+  <g font-family="'Segoe UI','Yu Gothic',sans-serif" fill="#172e26">
+    <text x="36" y="43" font-size="12" font-weight="700" letter-spacing="3">STUDYLOG LAB / WAYFINDER</text>
+    <text x="36" y="84" font-size="27" font-weight="700">道しるべの、4つの表情。</text>
+    <text x="36" y="111" font-size="14" fill="#68786e">横棒の土台をなくし、縦の支柱だけを残しました。色とサイズは共通です。</text>
+    <g fill="#fff" stroke="#dce4d9">
+      <rect x="26" y="137" width="462" height="319" rx="22"/>
+      <rect x="512" y="137" width="462" height="319" rx="22"/>
+      <rect x="26" y="480" width="462" height="319" rx="22"/>
+      <rect x="512" y="480" width="462" height="319" rx="22"/>
+    </g>
+    <use href="#balanced" x="57" y="180" width="128" height="128"/>
+    <use href="#solid" x="543" y="180" width="128" height="128"/>
+    <use href="#outline" x="57" y="523" width="128" height="128"/>
+    <use href="#soft" x="543" y="523" width="128" height="128"/>
+    <g font-size="12" fill="#63766a" font-weight="700" letter-spacing="2">
+      <text x="213" y="206">A / BALANCE</text><text x="699" y="206">B / SOLID</text>
+      <text x="213" y="549">C / OUTLINE</text><text x="699" y="549">D / SOFT</text>
+    </g>
+    <g font-size="23" font-weight="700">
+      <text x="213" y="240">塗りと線</text><text x="699" y="240">くっきり</text>
+      <text x="213" y="583">すっきり</text><text x="699" y="583">やわらか</text>
+    </g>
+    <g font-size="14" fill="#68786e">
+      <text x="213" y="271">元の案を整えた形。</text><text x="213" y="295">上の看板に視線が集まります。</text>
+      <text x="699" y="271">2枚とも塗りつぶし。</text><text x="699" y="295">小さくても形が残ります。</text>
+      <text x="213" y="614">2枚とも輪郭だけ。</text><text x="213" y="638">軽く、落ち着いた印象です。</text>
+      <text x="699" y="614">角を丸め、看板に短い線。</text><text x="699" y="638">親しみのある案内役です。</text>
+    </g>
+    <g stroke="#e6ebe2"><path d="M52 345h410"/><path d="M538 345h410"/><path d="M52 688h410"/><path d="M538 688h410"/></g>
+    <g font-size="12" fill="#68786e"><text x="58" y="400">小さいサイズで比較</text><text x="544" y="400">小さいサイズで比較</text><text x="58" y="743">小さいサイズで比較</text><text x="544" y="743">小さいサイズで比較</text></g>
+    <use href="#balanced" x="218" y="372" width="44" height="44"/><use href="#balanced" x="302" y="382" width="24" height="24"/>
+    <use href="#solid" x="704" y="372" width="44" height="44"/><use href="#solid" x="788" y="382" width="24" height="24"/>
+    <use href="#outline" x="218" y="715" width="44" height="44"/><use href="#outline" x="302" y="725" width="24" height="24"/>
+    <use href="#soft" x="704" y="715" width="44" height="44"/><use href="#soft" x="788" y="725" width="24" height="24"/>
+    <g font-size="10" fill="#68786e" text-anchor="middle"><text x="240" y="436">44 px</text><text x="314" y="436">24 px</text><text x="726" y="436">44 px</text><text x="800" y="436">24 px</text><text x="240" y="779">44 px</text><text x="314" y="779">24 px</text><text x="726" y="779">44 px</text><text x="800" y="779">24 px</text></g>
+  </g>
+</svg>

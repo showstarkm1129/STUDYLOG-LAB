@@ -37,11 +37,11 @@
     return a.x < b.x + b.columns && a.x + a.columns > b.x && a.y < b.y + b.rows && a.y + a.rows > b.y;
   }
 
-  function isPositionFree(cards, candidate, ignoredCardId = "") {
-    return !array(cards).some((card) => card.cardId !== ignoredCardId && overlaps(card, candidate));
+  function isPositionFree(cards, candidate, ignoredCard = null) {
+    return !array(cards).some((card) => card !== ignoredCard && overlaps(card, candidate));
   }
 
-  function findOpenPosition(cards, size, preferred = {}) {
+  function findOpenPosition(cards, size, preferred = {}, ignoredCard = null) {
     const spec = SIZE_SPECS[size];
     if (!spec) return { x: 1, y: 1 };
     const maximumX = 12 - spec.columns + 1;
@@ -52,7 +52,7 @@
       for (let x = startX; x <= maximumX; x += 1) xOrder.push(x);
       for (let x = 1; x < startX; x += 1) xOrder.push(x);
       for (const x of xOrder) {
-        if (isPositionFree(cards, { cardId: preferred.cardId, size, x, y }, preferred.cardId)) return { x, y };
+        if (isPositionFree(cards, { cardId: preferred.cardId, size, x, y }, ignoredCard)) return { x, y };
       }
     }
     return { x: 1, y: startY + 100 };
@@ -76,9 +76,9 @@
     return { x, y };
   }
 
-  function normalizeCard(card, definitions, usedIds, placedCards) {
+  function normalizeCard(card, definitions, placedCards) {
     const definition = definitions.get(String(card?.cardId || ""));
-    if (!definition || usedIds.has(definition.id)) return null;
+    if (!definition) return null;
     const allowedSizes = array(definition.allowedSizes).filter((size) => SIZE_SPECS[size]);
     if (!allowedSizes.length) return null;
     const size = allowedSizes.includes(card?.size) ? card.size : allowedSizes.includes(definition.defaultSize) ? definition.defaultSize : allowedSizes[0];
@@ -87,7 +87,6 @@
     const position = Number.isFinite(Number(card?.x)) && Number.isFinite(Number(card?.y)) && isPositionFree(placedCards, requested)
       ? { x: rect.x, y: rect.y }
       : findOpenPosition(placedCards, size, requested);
-    usedIds.add(definition.id);
     return { cardId: definition.id, size, ...position };
   }
 
@@ -95,10 +94,9 @@
     const id = String(page?.id || "");
     if (!id.startsWith("custom-") || usedPageIds.has(id)) return null;
     usedPageIds.add(id);
-    const usedCardIds = new Set();
     const cards = [];
     array(page.cards).forEach((card) => {
-      const normalized = normalizeCard(card, definitions, usedCardIds, cards);
+      const normalized = normalizeCard(card, definitions, cards);
       if (normalized) cards.push(normalized);
     });
     return {

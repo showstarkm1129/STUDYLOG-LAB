@@ -292,6 +292,82 @@
     }
   });
 
+  const ENTRY_REQUEST_EVENT = "studylog-bridge:attendance-entry-request";
+  const ENTRY_RESULT_EVENT = "studylog-bridge:attendance-entry-result";
+  const ENTRY_TIMEOUT_MS = 15000;
+
+  // 出席確認ボタンが押された時にスタログ自身が行う問い合わせだけを再現する。
+  // 受付フォームは開かず、コードの送信も受付の確定も行わない。
+  window.addEventListener(ENTRY_REQUEST_EVENT, (event) => {
+    const requestId = String(event.detail?.requestId || "").slice(0, 80);
+    const classId = String(event.detail?.classId || "").replace(/\D/g, "");
+    let settled = false;
+    const settle = (detail) => {
+      if (settled) return;
+      settled = true;
+      window.dispatchEvent(new CustomEvent(ENTRY_RESULT_EVENT, { detail: { requestId, ...detail } }));
+    };
+    if (!classId) {
+      settle({ ok: false, error: "科目を特定できませんでした。" });
+      return;
+    }
+    const api = window.glexa;
+    if (!api || typeof api.ajax !== "function") {
+      settle({ ok: false, error: "スタログの通信処理が見つかりません。科目のページで試してください。" });
+      return;
+    }
+    window.setTimeout(() => settle({ ok: false, error: "応答がありませんでした。" }), ENTRY_TIMEOUT_MS);
+    try {
+      api.ajax({
+        action: "glexa_modal_entry_form",
+        params: { class_id: classId, is_ajax: 1 },
+        withoutLoading: true,
+        onSuccess: (result) => settle({
+          ok: true,
+          hasData: Boolean(result?.data && typeof result.data === "object"),
+          isAccepted: String(result?.data?.is_accepted ?? "")
+        }),
+        onError: () => settle({ ok: false, error: "問い合わせに失敗しました。" })
+      });
+    } catch (error) {
+      settle({ ok: false, error: String(error?.message || error).slice(0, 120) });
+    }
+  });
+
+  const INSPECT_REQUEST_EVENT = "studylog-bridge:inspect-globals-request";
+  const INSPECT_RESULT_EVENT = "studylog-bridge:inspect-globals-result";
+  const INSPECT_SOURCE_LIMIT = 2000;
+  const INSPECT_MAX_FUNCTIONS = 8;
+
+  function globalFunction(name) {
+    try {
+      const value = window[name];
+      return typeof value === "function" ? value : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // ページ側の関数の中身を読むだけの調査用。呼び出しはしない。
+  window.addEventListener(INSPECT_REQUEST_EVENT, (event) => {
+    const requestId = String(event.detail?.requestId || "").slice(0, 80);
+    const queue = (Array.isArray(event.detail?.names) ? event.detail.names : []).map(String).slice(0, 5);
+    const sources = {};
+    while (queue.length && Object.keys(sources).length < INSPECT_MAX_FUNCTIONS) {
+      const name = queue.shift();
+      if (sources[name] !== undefined) continue;
+      const target = globalFunction(name);
+      if (!target) continue;
+      const source = String(target).slice(0, INSPECT_SOURCE_LIMIT);
+      sources[name] = source;
+      // 呼び出している関数も1段だけたどり、通信先が書かれた場所まで届くようにする。
+      for (const match of source.matchAll(/([A-Za-z_$][\w$]*)\s*\(/g)) {
+        if (sources[match[1]] === undefined && globalFunction(match[1])) queue.push(match[1]);
+      }
+    }
+    window.dispatchEvent(new CustomEvent(INSPECT_RESULT_EVENT, { detail: { requestId, sources } }));
+  });
+
   for (const method of ["pushState", "replaceState"]) {
     const original = history[method];
     history[method] = function () {

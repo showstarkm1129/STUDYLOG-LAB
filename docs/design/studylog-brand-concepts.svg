@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="600" viewBox="0 0 1080 600">
+  <defs>
+    <symbol id="bookmark" viewBox="0 0 80 80">
+      <circle cx="40" cy="40" r="40" fill="#172e26"/>
+      <path d="M25 18h30v45L40 54 25 63Z" fill="none" stroke="#d9f06f" stroke-width="4.5" stroke-linejoin="round"/>
+      <path d="M33 28h14m-14 9h9" stroke="#d9f06f" stroke-width="4" stroke-linecap="round"/>
+      <circle cx="47" cy="46" r="4" fill="#d9f06f"/>
+    </symbol>
+    <symbol id="wayfinder" viewBox="0 0 80 80">
+      <circle cx="40" cy="40" r="40" fill="#172e26"/>
+      <path d="M40 16v48m-8 0h16" fill="none" stroke="#d9f06f" stroke-width="4.5" stroke-linecap="round"/>
+      <path d="M21 22h33l9 9-9 9H21Z" fill="#d9f06f"/>
+      <path d="M58 45H28l-9 8 9 8h30Z" fill="#172e26" stroke="#d9f06f" stroke-width="3.5" stroke-linejoin="round"/>
+      <circle cx="31" cy="31" r="3" fill="#172e26"/>
+    </symbol>
+    <symbol id="lamp" viewBox="0 0 80 80">
+      <circle cx="40" cy="40" r="40" fill="#172e26"/>
+      <path d="M23 61 17 42l20-18" fill="none" stroke="#d9f06f" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="17" cy="42" r="4" fill="#d9f06f"/>
+      <path d="m40 18 16 9-2 12-26-15Z" fill="#d9f06f" stroke="#d9f06f" stroke-width="2" stroke-linejoin="round"/>
+      <path d="m44 42-3 7m13-4 3 6" fill="none" stroke="#d9f06f" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="M14 63h18" stroke="#d9f06f" stroke-width="5" stroke-linecap="round"/>
+      <path d="M39 59c5-2 9-1 12 1 3-2 7-3 12-1v7c-5-2-9-1-12 1-3-2-7-3-12-1Z" fill="#d9f06f"/>
+      <path d="M51 60v7" stroke="#172e26" stroke-width="2"/>
+    </symbol>
+  </defs>
+  <rect width="1080" height="600" rx="28" fill="#f2f5ef"/>
+  <g font-family="'Segoe UI','Yu Gothic',sans-serif" fill="#172e26">
+    <text x="42" y="46" font-size="12" font-weight="700" letter-spacing="3">STUDYLOG LAB / BRAND EXPLORATION</text>
+    <text x="42" y="91" font-size="28" font-weight="700">学びの「次」を、迷わず。</text>
+    <text x="42" y="120" font-size="14" fill="#68786e">現在地を覚える。進む先を示す。必要なところを照らす。</text>
+    <g fill="#fff" stroke="#dce4d9">
+      <rect x="28" y="150" width="328" height="418" rx="22"/>
+      <rect x="376" y="150" width="328" height="418" rx="22"/>
+      <rect x="724" y="150" width="328" height="418" rx="22"/>
+    </g>
+    <g fill="#6a7b70" font-size="11" font-weight="700" letter-spacing="2">
+      <text x="52" y="183">01 / KEEP YOUR PLACE</text>
+      <text x="400" y="183">02 / FIND YOUR NEXT</text>
+      <text x="748" y="183">03 / LIGHT YOUR DESK</text>
+    </g>
+    <use href="#bookmark" x="128" y="213" width="128" height="128"/>
+    <use href="#wayfinder" x="476" y="213" width="128" height="128"/>
+    <use href="#lamp" x="824" y="213" width="128" height="128"/>
+    <g text-anchor="middle">
+      <g font-size="23" font-weight="700"><text x="192" y="384">しおり</text><text x="540" y="384">道しるべ</text><text x="888" y="384">机のライト</text></g>
+      <g font-size="14" fill="#68786e">
+        <text x="192" y="415">いまの場所を覚えて、続きをひらく。</text>
+        <text x="540" y="415">散らばった情報から、次の一歩へ。</text>
+        <text x="888" y="415">必要な情報を照らす、学習の相棒。</text>
+        <text x="192" y="440">記録・整理・安心感</text>
+        <text x="540" y="440">案内・判断・前進</text>
+        <text x="888" y="440">支援・発見・親しみ</text>
+      </g>
+    </g>
+    <g stroke="#e6ebe2"><path d="M52 466h280"/><path d="M400 466h280"/><path d="M748 466h280"/></g>
+    <g font-size="11" fill="#68786e"><text x="67" y="519">44 / 24 px</text><text x="415" y="519">44 / 24 px</text><text x="763" y="519">44 / 24 px</text></g>
+    <use href="#bookmark" x="161" y="489" width="44" height="44"/><use href="#bookmark" x="235" y="499" width="24" height="24"/>
+    <use href="#wayfinder" x="509" y="489" width="44" height="44"/><use href="#wayfinder" x="583" y="499" width="24" height="24"/>
+    <use href="#lamp" x="857" y="489" width="44" height="44"/><use href="#lamp" x="931" y="499" width="24" height="24"/>
+  </g>
+</svg>

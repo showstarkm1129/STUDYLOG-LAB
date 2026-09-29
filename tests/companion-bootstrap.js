@@ -38,8 +38,8 @@
       <table id="div-top-timetable">
         <thead><tr><th>時限</th><th>7/28</th><th>7/29</th><th>7/30</th></tr></thead>
         <tbody>
-          <tr><th>1限</th><td class="top-timetable-table-td"><a href="/lms/class/10184/">オブジェクト指向設計</a> 教室 : 902A</td><td class="top-timetable-table-td"><a href="/lms/class/10067/">Webアプリ基礎S</a> 教室 : 603</td><td class="top-timetable-table-td"><a href="/lms/class/10171/">LinuxⅠ</a> 教室 : 601</td></tr>
-          <tr><th>4限</th><td></td><td class="top-timetable-table-td"><a href="/lms/class/10019/">簿記入門a</a> 教室 : 603</td><td class="top-timetable-table-td"><a href="/lms/class/10175/153362/">データベース</a> 教室 : 601</td></tr>
+          <tr><th>1限</th><td class="top-timetable-table-td"><div class="div-class-name"><a href="/lms/class/10184/">オブジェクト指向設計</a><div class="text-right"><small>高橋先生</small></div><div class="text-right"><small>教室 :</small> 902A</div></div></td><td class="top-timetable-table-td"><div class="div-class-name"><a href="/lms/class/10067/">Webアプリ基礎S</a><div class="text-right"><small>片寄先生</small></div><div class="text-right"><small>教室 :</small> 603</div></div></td><td class="top-timetable-table-td"><div class="div-class-name"><a href="/lms/class/10171/">LinuxⅠ</a><div class="text-right"><small>大久保先生</small></div><div class="text-right"><small>教室 :</small> 601</div></div></td></tr>
+          <tr><th>4限</th><td></td><td class="top-timetable-table-td"><div class="div-class-name"><a href="/lms/class/10019/">簿記入門a</a><div class="text-right"><small>山尾先生</small></div><div class="text-right"><small>教室 :</small> 603</div></div></td><td class="top-timetable-table-td"><div class="div-class-name"><a href="/lms/class/10175/153362/">データベース</a><div class="text-right"><small>中山先生</small></div><div class="text-right"><small>教室 :</small> 601</div></div></td></tr>
         </tbody>
       </table>`);
   }
@@ -76,6 +76,7 @@
     document.head.append(script);
   });
   await loadScript("/attendance-rules.js");
+  await loadScript("/attendance-watch-rules.js");
   await loadScript("/digest-rules.js");
   await loadScript("/task-rules.js");
   await loadScript("/auto-sync-rules.js");

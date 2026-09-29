@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="500" viewBox="0 0 960 500">
+  <defs>
+    <symbol id="book-check" viewBox="0 0 64 64">
+      <circle cx="32" cy="32" r="32" fill="#17251f"/>
+      <path d="M32 22c-6-5-13-6-20-4v29c7-2 14-1 20 4 6-5 13-6 20-4V18c-7-2-14-1-20 4zm0 0v29" fill="none" stroke="#d9f06f" stroke-width="3.5" stroke-linejoin="round"/>
+      <path d="m37 32 4 4 8-10" fill="none" stroke="#d9f06f" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="log-s" viewBox="0 0 64 64">
+      <circle cx="32" cy="32" r="32" fill="#17251f"/>
+      <path d="M46 18H27c-14 0-14 14 0 14h10c14 0 14 14 0 14H18" fill="none" stroke="#d9f06f" stroke-width="5" stroke-linecap="round"/>
+      <circle cx="46" cy="18" r="4" fill="#d9f06f"/><circle cx="18" cy="46" r="4" fill="#d9f06f"/>
+    </symbol>
+    <symbol id="book-spark" viewBox="0 0 64 64">
+      <circle cx="32" cy="32" r="32" fill="#17251f"/>
+      <path d="M32 29c-6-4-12-5-19-3v22c7-2 13-1 19 3 6-4 12-5 19-3V26c-7-2-13-1-19 3zm0 0v22" fill="none" stroke="#d9f06f" stroke-width="3.5" stroke-linejoin="round"/>
+      <path d="m32 9 2.7 6.3L41 18l-6.3 2.7L32 27l-2.7-6.3L23 18l6.3-2.7Z" fill="#d9f06f"/>
+    </symbol>
+  </defs>
+  <rect width="960" height="500" rx="24" fill="#f3f6f2"/>
+  <g font-family="'Segoe UI','Yu Gothic',sans-serif" fill="#17251f">
+    <text x="40" y="48" font-size="13" font-weight="700" letter-spacing="3">STUDYLOG LAB · ICON CONCEPTS</text>
+    <text x="40" y="87" font-size="25" font-weight="700">小さくても、学びの道具だと伝わるマーク。</text>
+    <g fill="#fff" stroke="#dbe3dd"><rect x="30" y="116" width="290" height="348" rx="18"/><rect x="335" y="116" width="290" height="348" rx="18"/><rect x="640" y="116" width="290" height="348" rx="18"/></g>
+    <use href="#book-check" x="123" y="147" width="104" height="104"/>
+    <use href="#log-s" x="428" y="147" width="104" height="104"/>
+    <use href="#book-spark" x="733" y="147" width="104" height="104"/>
+    <g text-anchor="middle" font-size="20" font-weight="700"><text x="175" y="290">A　学習ノート＋チェック</text><text x="480" y="290">B　つながる S</text><text x="785" y="290">C　ひらめく本</text></g>
+    <g text-anchor="middle" font-size="14" fill="#65716a"><text x="175" y="319">授業・課題・記録をひとつに。</text><text x="175" y="342">用途が直感的に伝わる案。</text><text x="480" y="319">Study と Log をつなぐ軌跡。</text><text x="480" y="342">小ささと独自性を優先する案。</text><text x="785" y="319">学びから生まれる発見。</text><text x="785" y="342">LABらしい好奇心を表す案。</text></g>
+    <g fill="#65716a" font-size="11"><text x="74" y="422">実寸比較</text><text x="379" y="422">実寸比較</text><text x="684" y="422">実寸比較</text></g>
+    <use href="#book-check" x="139" y="391" width="44" height="44"/><use href="#book-check" x="204" y="401" width="24" height="24"/>
+    <use href="#log-s" x="444" y="391" width="44" height="44"/><use href="#log-s" x="509" y="401" width="24" height="24"/>
+    <use href="#book-spark" x="749" y="391" width="44" height="44"/><use href="#book-spark" x="814" y="401" width="24" height="24"/>
+  </g>
+</svg>

@@ -7,7 +7,9 @@
     "doc": "docs",
     "test": "tests"
   },
-  "scripts": {},
+  "scripts": {
+    "test": "node tests/attendance-rules-smoke.cjs && node tests/attendance-watch-rules-smoke.cjs && node tests/ms-signin-rules-smoke.cjs && node tests/slack-link-rules-smoke.cjs && node tests/discord-webhook-rules-smoke.cjs && node tests/auto-sync-rules-smoke.cjs && node tests/background-smoke.cjs && node tests/dashboard-custom-pages-smoke.cjs && node tests/dashboard-icons-smoke.cjs && node tests/dashboard-layout-smoke.cjs && node tests/dashboard-card-sizes-smoke.cjs && node tests/digest-rules-smoke.cjs && node tests/task-rules-smoke.cjs && node tests/attendance-dialog-smoke.cjs && node tests/auto-sync-browser-smoke.cjs && node tests/next-course-browser-smoke.cjs && node tests/attendance-watch-browser-smoke.cjs && node tests/ms-signin-browser-smoke.cjs && node tests/connections-browser-smoke.cjs"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/showstarkm1129/sutarogu.git"

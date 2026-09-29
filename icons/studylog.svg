@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2048" height="2048" viewBox="0 0 80 80">
+  <title>Studylog — 道しるべ</title>
+  <desc>淡い木目のアイボリーに、深緑の輪郭で描いた道しるべ。</desc>
+  <defs>
+    <clipPath id="disc"><circle cx="40" cy="40" r="40"/></clipPath>
+  </defs>
+  <circle cx="40" cy="40" r="40" fill="#fff5dd"/>
+  <g clip-path="url(#disc)" fill="none" stroke="#96734d" stroke-width=".23" opacity=".12">
+    <path d="M-4 7C16 3 33 11 52 7S76 4 86 6M-4 10C18 6 34 14 53 10S75 7 86 9"/>
+    <path d="M-4 17C13 12 32 21 48 17S71 14 86 17M-4 19C15 15 33 24 50 20S72 17 86 20"/>
+    <path d="M-4 26C17 22 32 30 50 27S71 24 86 27M-4 29C18 26 32 33 53 30S74 28 86 30"/>
+    <path d="M-4 37C14 31 30 40 50 36S73 34 86 37M-4 40C17 34 32 43 51 39S72 37 86 40"/>
+    <path d="M-4 47C8 45 12 41 22 44S33 50 49 46 73 45 86 46M-4 50C7 49 13 44 23 47S34 53 51 49 75 48 86 49"/>
+    <path d="M-4 57C6 57 9 51 18 51S28 60 43 56 66 55 86 57M-4 60C6 61 10 55 18 55S28 64 44 60 67 58 86 60"/>
+    <path d="M-4 66C17 62 32 70 52 66S72 65 86 66M-4 69C18 65 32 73 51 70S74 68 86 69"/>
+    <path d="M-4 77C14 72 33 80 52 76S73 75 86 77"/>
+  </g>
+  <g fill="none" stroke="#235548" stroke-width="3.5" stroke-linejoin="round">
+    <path d="M40 14v7m0 18v5m0 16v7" stroke-linecap="round"/>
+    <path d="M21 21h33l9 9-9 9H21Zm38 23H27l-9 8 9 8h32Z"/>
+  </g>
+</svg>

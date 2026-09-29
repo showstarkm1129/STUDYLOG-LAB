@@ -298,6 +298,12 @@
     return startDate ? Array.from({ length: 7 }, (_, index) => addDays(startDate, index)) : [];
   }
 
+  function readTimetableTeacherName(cell) {
+    return [...cell.querySelectorAll(".div-class-name .text-right small")]
+      .map(text)
+      .find((value) => value && !/^教室\s*[:：]?$/.test(value));
+  }
+
   function readNormalizedTimetable(fallbackStartDate) {
     const firstCell = document.querySelector(".top-timetable-table-td");
     const table = firstCell?.closest("table");
@@ -324,10 +330,11 @@
       const route = parseClassLink(link?.getAttribute("href"));
       const rawText = text(cell);
       const parsedRoom = rawText.match(/教室\s*[:：]\s*([0-9]{2,4}[A-Za-z]?)/)?.[1];
+      const parsedTeacherName = readTimetableTeacherName(cell);
       // 連続時限は「2 〃」のように時限番号の後へ省略記号が付く。
       const continuation = !route.classId && /^(?:[1-6]\s*)?〃(?:\s|$)/.test(rawText);
       const inherited = continuation ? lastCourseByColumn.get(columnIndex) : undefined;
-      const course = route.classId ? { classId: route.classId, directoryId: route.directoryId, courseName: text(link), room: parsedRoom } : inherited;
+      const course = route.classId ? { classId: route.classId, directoryId: route.directoryId, courseName: text(link), teacherName: parsedTeacherName, room: parsedRoom } : inherited;
       if (!course?.classId) return;
       if (route.classId) lastCourseByColumn.set(columnIndex, course);
       const dateLabel = headerLabels.find((label) => dateFromLabel(label)) || dateButtons[columnIndex - 1];
@@ -360,6 +367,7 @@
         classId: route.classId,
         directoryId: route.directoryId,
         courseName: text(link),
+        teacherName: readTimetableTeacherName(cell),
         text: text(cell),
         href: link ? new URL(link.getAttribute("href"), location.origin).pathname : undefined
       };
@@ -745,6 +753,50 @@
   function todayCourseBlocks(snapshot) {
     const slots = orderedSlots(snapshot).filter((slot) => slot.date === isoDay(new Date()));
     return slots.filter((slot, index) => index === 0 || String(slot.classId) !== String(slots[index - 1].classId));
+  }
+
+  function courseNavigationContext(snapshot) {
+    if (!["class", "directory"].includes(pageScene())) return null;
+    const { classId, directoryId } = readClassContext();
+    const slots = orderedSlots(snapshot);
+    const matchesDirectory = (item) => String(item.classId) === String(classId)
+      && directoryId && String(item.directoryId) === String(directoryId);
+    const directory = array(snapshot.directories).find(matchesDirectory);
+    const exactDates = [...new Set(slots.filter(matchesDirectory).map((slot) => slot.date))];
+    const lessonDate = directory?.lessonDate || dateFromLessonText(directory?.title, Number(directory?.academicYear || snapshot.academicYear));
+    const dates = exactDates.length ? exactDates : lessonDate ? [lessonDate]
+      : [...new Set(slots.filter((slot) => String(slot.classId) === String(classId)).map((slot) => slot.date))];
+    const contextKey = `${classId}:${directoryId || ""}`;
+    const selector = document.querySelector("#studylog-course-navigation-date");
+    const selectedDate = selector?.dataset.context === contextKey ? selector.value : "";
+    const linkedDate = String(parseClassLink(location.pathname).classId) === String(classId)
+      ? new URLSearchParams(location.search).get("studylogDate") : "";
+    const date = dates.length === 1 ? dates[0]
+      : dates.includes(selectedDate) ? selectedDate : dates.includes(linkedDate) ? linkedDate : null;
+    return { classId, directoryId, slots, matchesDirectory, dates, date, contextKey };
+  }
+
+  function adjacentCourseFromCurrentPage(snapshot, offset, navigation) {
+    if (!navigation?.date) return null;
+    const { classId, directoryId, slots, matchesDirectory, date } = navigation;
+    const blocks = [...new Set(slots.map((slot) => slot.date))]
+      .flatMap((day) => StudylogAttendanceWatchRules.blocks(slots, PERIOD_TIMES, day));
+    const slotsFor = (block) => slots.filter((slot) => slot.date === block.date
+      && String(slot.classId) === block.classId && block.periods.includes(Number(slot.period)));
+    let candidates = blocks.filter((block) => block.date === date && block.classId === String(classId));
+    if (directoryId) {
+      const exact = candidates.filter((block) => slotsFor(block).some(matchesDirectory));
+      candidates = exact.length ? exact : candidates.filter((block) => slotsFor(block).every((slot) => !slot.directoryId));
+    }
+    // 同じ日に複数のまとまりがあり、表示中の回を特定できない場合はリンクを推測しない。
+    if (candidates.length !== 1) return null;
+    const adjacent = blocks[blocks.indexOf(candidates[0]) + offset];
+    if (!adjacent || !/^\d+$/.test(adjacent.classId)) return null;
+    const adjacentSlots = slotsFor(adjacent);
+    const target = adjacentSlots.find((slot) => /^\d+$/.test(String(slot.directoryId || ""))) || adjacentSlots[0];
+    const needsDate = adjacent.date !== isoDay(new Date()) || new Set(slots.filter((slot) => String(slot.classId) === adjacent.classId).map((slot) => slot.date)).size > 1;
+    const href = `/lms/class/${adjacent.classId}/${target.directoryId && /^\d+$/.test(String(target.directoryId)) ? `${target.directoryId}/` : ""}${needsDate ? `?studylogDate=${encodeURIComponent(adjacent.date)}` : ""}`;
+    return { href, label: `${offset < 0 ? "← 前の授業へ" : "次の授業へ →"} ${formatContextDate(adjacent.date)} ${adjacent.periods.join("・")}限 ${target.courseName || courseName(snapshot, adjacent.classId)}` };
   }
 
   function courseMap(snapshot) {
@@ -1210,7 +1262,35 @@
       ? [suppliedSnapshot, suppliedPreferences]
       : await Promise.all([readSnapshot(), readPreferences()]);
     const scene = pageScene();
-    root.querySelector("#studylog-bridge-toggle").innerHTML = `<span class="studylog-context-dot">S</span><span>${escapeHtml(compactLabel(scene, snapshot, preferences))}</span>`;
+    const navigation = courseNavigationContext(snapshot);
+    root.querySelector("#studylog-course-navigation").hidden = !navigation;
+    const dateControl = root.querySelector("#studylog-course-navigation-choice");
+    const dateSelector = root.querySelector("#studylog-course-navigation-date");
+    dateControl.hidden = !navigation || navigation.dates.length < 2;
+    dateSelector.innerHTML = '<option value="">日付を選択</option>' + (navigation?.dates || []).map((date) => `<option value="${escapeHtml(date)}">${escapeHtml(formatContextDate(date))}</option>`).join("");
+    dateSelector.dataset.context = navigation?.contextKey || "";
+    dateSelector.value = navigation?.date || "";
+    let hasCourseLink = false;
+    for (const [direction, offset] of [["previous", -1], ["next", 1]]) {
+      const course = adjacentCourseFromCurrentPage(snapshot, offset, navigation);
+      hasCourseLink ||= Boolean(course);
+      const shortcut = root.querySelector(`#studylog-${direction}-course`);
+      shortcut.hidden = !course;
+      if (course) {
+        shortcut.href = course.href;
+        shortcut.textContent = course.label;
+      } else {
+        shortcut.removeAttribute("href");
+        shortcut.textContent = "";
+      }
+    }
+    const navigationStatus = root.querySelector("#studylog-course-navigation-status");
+    navigationStatus.hidden = !navigation || hasCourseLink;
+    navigationStatus.textContent = !navigation ? "" : !navigation.dates.length
+      ? "この科目の時間割が未取得です。トップで該当する日の時間割を表示してください。"
+      : !navigation.date ? "この科目は複数日にあります。前後に移動する日付を選んでください。"
+      : "保存済み時間割に前後の授業がないか、この授業回を特定できません。該当する日の時間割を確認してください。";
+    root.querySelector("#studylog-bridge-toggle").title = `STUDYLOGメニュー · ${compactLabel(scene, snapshot, preferences)}`;
     root.querySelector("#studylog-context-body").innerHTML = sceneContent(scene, snapshot, preferences);
     root.querySelector("#studylog-context-title").textContent = sceneTitle(scene);
     root.querySelector('[data-action="dashboard"][data-footer]').dataset.view = dashboardView(scene);
@@ -1218,6 +1298,7 @@
     root.querySelector("#studylog-bridge-status").textContent = `最終取得: ${updated}`;
     markUnitExamTimetable(snapshot);
     renderInlineTaskControls(snapshot, preferences);
+    root.dataset.ready = "true";
   }
 
   let automaticCollectionPromise;
@@ -1429,18 +1510,31 @@
           <button type="button" data-action="export">JSON</button>
         </div>
         <p id="studylog-bridge-status"></p>
+        <div id="studylog-course-navigation" hidden>
+          <p id="studylog-course-navigation-status" hidden></p>
+          <label id="studylog-course-navigation-choice" hidden>時間割の日付 <select id="studylog-course-navigation-date"></select></label>
+          <a id="studylog-previous-course" class="studylog-course-shortcut" hidden></a>
+          <a id="studylog-next-course" class="studylog-course-shortcut" hidden></a>
+        </div>
       </div>
-      <button id="studylog-bridge-toggle" type="button"><span class="studylog-context-dot">S</span><span>読み込み中…</span></button>`;
+      <button id="studylog-bridge-toggle" type="button" aria-label="STUDYLOGメニューを開閉" aria-controls="studylog-bridge-panel" aria-expanded="false"><img class="studylog-context-icon" src="${chrome.runtime.getURL("icons/studylog.svg")}" alt="" aria-hidden="true"></button>`;
     document.documentElement.append(root);
+    root.querySelector("#studylog-course-navigation-date").addEventListener("change", () => renderCompanion(root));
     root.addEventListener("click", async (event) => {
       const action = event.target.closest("[data-action]")?.dataset.action;
       const panel = root.querySelector("#studylog-bridge-panel");
       if (event.target.closest("#studylog-bridge-toggle")) {
         panel.dataset.open = panel.dataset.open === "true" ? "false" : "true";
+        root.querySelector("#studylog-bridge-toggle").setAttribute("aria-expanded", panel.dataset.open);
         if (panel.dataset.open === "true") await renderCompanion(root);
         return;
       }
-      if (action === "close") { panel.dataset.open = "false"; return; }
+      if (action === "close") {
+        panel.dataset.open = "false";
+        root.querySelector("#studylog-bridge-toggle").setAttribute("aria-expanded", "false");
+        root.querySelector("#studylog-bridge-toggle").focus();
+        return;
+      }
       if (action === "collect") {
         const button = event.target.closest("button");
         button.disabled = true;
@@ -1582,6 +1676,330 @@
     lastContextLocation = location.href;
   }
 
+  const ATTENDANCE_WATCH_STATE_KEY = "studylogAttendanceWatchStateV1";
+  const ATTENDANCE_PROBE_LOG_LIMIT = 60;
+
+  function attendanceWatchSettings(preferences) {
+    const stored = preferences?.attendanceWatch || {};
+    return {
+      enabled: Boolean(stored.enabled),
+      mode: stored.mode === "screen" ? "screen" : "entry",
+      channels: {
+        desktop: stored.channels?.desktop !== false,
+        sound: stored.channels?.sound !== false,
+        slack: Boolean(stored.channels?.slack),
+        discord: Boolean(stored.channels?.discord)
+      },
+      slackWebhookUrl: String(stored.slackWebhookUrl || stored.slack?.webhookUrl || ""),
+      discordWebhookUrl: String(stored.discordWebhookUrl || stored.discord?.webhookUrl || ""),
+      snoozedUntil: Number(stored.snoozedUntil || 0)
+    };
+  }
+
+  async function readAttendanceWatchState() {
+    const stored = await chrome.storage.local.get(ATTENDANCE_WATCH_STATE_KEY);
+    const state = stored[ATTENDANCE_WATCH_STATE_KEY] || {};
+    return { blocks: state.blocks || {}, probes: array(state.probes) };
+  }
+
+  async function saveAttendanceWatchState(state) {
+    await chrome.storage.local.set({
+      [ATTENDANCE_WATCH_STATE_KEY]: {
+        blocks: state.blocks,
+        probes: array(state.probes).slice(-ATTENDANCE_PROBE_LOG_LIMIT)
+      }
+    });
+  }
+
+  // 検知の調整に使う記録。コード値・氏名・画面本文は残さず、判定結果と署名が変わったかどうかだけを保存する。
+  function recordAttendanceProbe(state, entry) {
+    state.probes = [...array(state.probes), { at: new Date().toISOString(), ...entry }].slice(-ATTENDANCE_PROBE_LOG_LIMIT);
+  }
+
+  const ATTENDANCE_ENTRY_TIMEOUT_MS = 16000;
+
+  function requestAttendanceEntryState(classId) {
+    return new Promise((resolve) => {
+      const requestId = `entry-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const listener = (event) => {
+        if (event.detail?.requestId !== requestId) return;
+        window.clearTimeout(timer);
+        window.removeEventListener("studylog-bridge:attendance-entry-result", listener);
+        resolve(event.detail);
+      };
+      const timer = window.setTimeout(() => {
+        window.removeEventListener("studylog-bridge:attendance-entry-result", listener);
+        resolve({ ok: false, error: "応答がありませんでした。" });
+      }, ATTENDANCE_ENTRY_TIMEOUT_MS);
+      window.addEventListener("studylog-bridge:attendance-entry-result", listener);
+      window.dispatchEvent(new CustomEvent("studylog-bridge:attendance-entry-request", { detail: { requestId, classId } }));
+    });
+  }
+
+  async function probeAttendance(classId, mode) {
+    if (mode !== "screen") {
+      const reply = await requestAttendanceEntryState(classId);
+      if (!reply?.ok) throw new Error(reply?.error || "受付状態を確認できませんでした。");
+      return { signature: null, entry: null, isAccepted: reply.isAccepted, screenState: StudylogAttendanceWatchRules.classifyEntry(reply) };
+    }
+    const html = await fetchText(`/lms/class/${encodeURIComponent(classId)}/`);
+    const entry = StudylogAttendanceWatchRules.entryFrom(new DOMParser().parseFromString(html, "text/html"));
+    const signature = StudylogAttendanceWatchRules.signature(entry);
+    const target = StudylogAttendanceWatchRules.entryUrl(entry, location.origin);
+    if (!target) return { signature, entry, screenState: "no-url" };
+    return { signature, entry, screenState: StudylogAttendanceWatchRules.classifyScreen(await fetchText(target)) };
+  }
+
+  function viewingCourse(classId) {
+    return document.visibilityState === "visible"
+      && pageKind() === "class"
+      && String(readClassContext().classId || "") === String(classId);
+  }
+
+  let attendanceWatchTimer;
+  let attendanceWatchRunning = false;
+
+  function scheduleAttendanceWatch(delayMs) {
+    clearTimeout(attendanceWatchTimer);
+    // 下限は暴走防止のためだけに置く。実際の間隔は plan() の判定が決める。
+    attendanceWatchTimer = window.setTimeout(runAttendanceWatch, Math.max(Number(delayMs) || 60 * 1000, 5 * 1000));
+  }
+
+  async function announceAttendanceOpen(block, snapshot, settings, state) {
+    const decision = StudylogAttendanceWatchRules.notification({
+      blockState: state.blocks[block.key],
+      viewingClass: viewingCourse(block.classId),
+      channels: settings.channels,
+      snoozedUntil: settings.snoozedUntil
+    });
+    if (!decision.notify) return;
+    state.blocks[block.key] = { ...state.blocks[block.key], notifiedAt: new Date().toISOString() };
+    try {
+      await chrome.runtime.sendMessage({
+        type: "studylog-bridge:attendance-open",
+        channels: [...decision.channels],
+        quiet: decision.quiet,
+        courseName: courseName(snapshot, block.classId),
+        periodLabel: `${block.periods.join("・")}限`,
+        url: `${location.origin}/lms/class/${encodeURIComponent(block.classId)}/`,
+        slackWebhookUrl: settings.slackWebhookUrl,
+        discordWebhookUrl: settings.discordWebhookUrl
+      });
+    } catch {
+      // バックグラウンドへ届かない場合でも、検知そのものは記録済みとして扱う。
+    }
+  }
+
+  // 本番と同じ経路を、受付中という判定だけ差し替えて一度だけ走らせる。
+  // 見張りの記録には検知も通知済みも書かないので、この後に本物の受付が来ても取り逃がさない。
+  async function rehearseAttendanceOpen(classId) {
+    const target = String(classId || "");
+    if (!target) throw new Error("科目を特定できませんでした。");
+    const [snapshot, preferences, state] = await Promise.all([readSnapshot(), readPreferences(), readAttendanceWatchState()]);
+    const settings = attendanceWatchSettings(preferences);
+    // 受付状態の問い合わせは本物を使う。ここで失敗するなら本番でも失敗する。
+    const probe = await probeAttendance(target, settings.mode);
+    const today = StudylogAttendanceWatchRules.isoDay(new Date());
+    const scheduled = StudylogAttendanceWatchRules.blocks(array(snapshot.timetableSlots), PERIOD_TIMES, today)
+      .find((item) => String(item.classId) === target);
+    const block = scheduled || { key: `rehearsal:${today}:${target}`, classId: target, periods: [] };
+    const viewing = viewingCourse(target);
+    const decision = StudylogAttendanceWatchRules.notification({
+      blockState: {},
+      viewingClass: viewing,
+      channels: settings.channels,
+      snoozedUntil: settings.snoozedUntil
+    });
+    if (decision.notify) {
+      await chrome.runtime.sendMessage({
+        type: "studylog-bridge:attendance-open",
+        channels: [...decision.channels],
+        quiet: decision.quiet,
+        // 本物の受付と見分けがつくようにしておく。
+        courseName: `【予行演習】${courseName(snapshot, target)}`,
+        periodLabel: block.periods.length ? `${block.periods.join("・")}限` : "予行演習",
+        url: `${location.origin}/lms/class/${encodeURIComponent(target)}/`,
+        slackWebhookUrl: settings.slackWebhookUrl,
+        discordWebhookUrl: settings.discordWebhookUrl
+      });
+    }
+    recordAttendanceProbe(state, {
+      classId: target,
+      blockKey: block.key,
+      mode: settings.mode,
+      screenState: probe.screenState,
+      outcome: "rehearsal"
+    });
+    await saveAttendanceWatchState(state);
+    return {
+      screenState: probe.screenState,
+      isAccepted: probe.isAccepted ?? null,
+      notify: decision.notify,
+      reason: decision.reason,
+      channels: [...decision.channels],
+      viewingClass: viewing,
+      courseName: courseName(snapshot, target),
+      scheduledToday: Boolean(scheduled)
+    };
+  }
+
+  async function runAttendanceWatch() {
+    if (attendanceWatchRunning || isQuizScreen() || location.hostname !== "portal.iwasaki.ac.jp") return;
+    attendanceWatchRunning = true;
+    try {
+      const [snapshot, preferences, state] = await Promise.all([readSnapshot(), readPreferences(), readAttendanceWatchState()]);
+      const settings = attendanceWatchSettings(preferences);
+      const beforePrune = Object.keys(state.blocks).length;
+      state.blocks = StudylogAttendanceWatchRules.prune(state.blocks, StudylogAttendanceWatchRules.isoDay(new Date()));
+      const plan = StudylogAttendanceWatchRules.plan({
+        slots: array(snapshot.timetableSlots),
+        periodTimes: PERIOD_TIMES,
+        state: state.blocks,
+        enabled: settings.enabled,
+        snoozedUntil: settings.snoozedUntil
+      });
+      if (!plan.watching) {
+        if (beforePrune !== Object.keys(state.blocks).length) await saveAttendanceWatchState(state);
+        scheduleAttendanceWatch(["no-lesson", "disabled", "snoozed"].includes(plan.reason) ? 10 * 60 * 1000 : 60 * 1000);
+        return;
+      }
+
+      // 複数タブを開いていても、確認するのは常に1タブだけにする。
+      const lease = await acquireAutomaticCollectionLease();
+      if (!lease.granted) {
+        scheduleAttendanceWatch(30 * 1000);
+        return;
+      }
+
+      const block = plan.block;
+      let result;
+      try {
+        result = await probeAttendance(block.classId, settings.mode);
+        state.blocks[block.key] = StudylogAttendanceWatchRules.afterCheck(state.blocks[block.key], { ok: true });
+      } catch (error) {
+        state.blocks[block.key] = StudylogAttendanceWatchRules.afterCheck(state.blocks[block.key], { ok: false });
+        recordAttendanceProbe(state, { classId: block.classId, blockKey: block.key, outcome: "error", detail: String(error?.message || error).slice(0, 120) });
+        await saveAttendanceWatchState(state);
+        scheduleAttendanceWatch(plan.nextDelayMs);
+        return;
+      } finally {
+        releaseAutomaticCollectionLease(lease.leaseId);
+      }
+
+      const open = result.screenState === "open";
+      recordAttendanceProbe(state, {
+        classId: block.classId,
+        blockKey: block.key,
+        mode: settings.mode,
+        screenState: result.screenState,
+        outcome: open ? "open" : "quiet"
+      });
+      if (result.screenState === "done") state.blocks[block.key] = { ...state.blocks[block.key], completedAt: new Date().toISOString() };
+      if (open) {
+        state.blocks[block.key] = { ...state.blocks[block.key], detectedAt: new Date().toISOString() };
+        await announceAttendanceOpen(block, snapshot, settings, state);
+      }
+      await saveAttendanceWatchState(state);
+      scheduleAttendanceWatch(plan.nextDelayMs);
+    } catch {
+      scheduleAttendanceWatch(5 * 60 * 1000);
+    } finally {
+      attendanceWatchRunning = false;
+    }
+  }
+
+  const ATTENDANCE_HANDLER_TIMEOUT_MS = 2000;
+
+  function handlerNames(onclick) {
+    return [...new Set([...String(onclick || "").matchAll(/([A-Za-z_$][\w$]*)\s*\(/g)].map((match) => match[1]))].slice(0, 5);
+  }
+
+  // ページ側にある関数の中身を読む。呼び出しはせず、通信先を知るためだけに使う。
+  function readPageHandlerSources(names) {
+    if (!names.length) return Promise.resolve({});
+    return new Promise((resolve) => {
+      const requestId = `inspect-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const listener = (event) => {
+        if (event.detail?.requestId !== requestId) return;
+        window.clearTimeout(timer);
+        window.removeEventListener("studylog-bridge:inspect-globals-result", listener);
+        resolve(event.detail?.sources || {});
+      };
+      const timer = window.setTimeout(() => {
+        window.removeEventListener("studylog-bridge:inspect-globals-result", listener);
+        resolve({});
+      }, ATTENDANCE_HANDLER_TIMEOUT_MS);
+      window.addEventListener("studylog-bridge:inspect-globals-result", listener);
+      window.dispatchEvent(new CustomEvent("studylog-bridge:inspect-globals-request", { detail: { requestId, names } }));
+    });
+  }
+
+  function attendanceDocumentFacts(doc, url) {
+    return {
+      url,
+      title: (doc?.title || "").slice(0, 120),
+      loginScreen: Boolean(doc?.querySelector('input[type="password"]')) || /login|signin/i.test(String(url || "")),
+      entry: StudylogAttendanceWatchRules.entryFrom(doc)
+    };
+  }
+
+  // 表示中の画面と、取得したHTMLの両方を見る。片方だけに出る場合は描画のしかたが違う。
+  async function inspectAttendance(classId) {
+    const rules = StudylogAttendanceWatchRules;
+    const target = String(classId || readClassContext().classId || "");
+    if (!target) throw new Error("科目を特定できませんでした。");
+    const onThisPage = pageKind() === "class" && String(readClassContext().classId || "") === target;
+    const live = onThisPage ? attendanceDocumentFacts(document, location.href) : null;
+
+    const response = await fetch(`/lms/class/${encodeURIComponent(target)}/`, { credentials: "include" });
+    if (!response.ok) throw new Error(`科目トップを取得できませんでした (HTTP ${response.status})`);
+    const fetched = attendanceDocumentFacts(new DOMParser().parseFromString(await response.text(), "text/html"), response.url);
+
+    const entry = live?.entry || fetched.entry;
+    const result = {
+      classId: target,
+      live,
+      fetched,
+      signature: rules.signature(entry),
+      entryUrl: rules.entryUrl(entry, location.origin),
+      handlers: {},
+      entryCheck: null,
+      screen: null
+    };
+    if (entry?.onclick && onThisPage) result.handlers = await readPageHandlerSources(handlerNames(entry.onclick));
+    const reply = await requestAttendanceEntryState(target);
+    result.entryCheck = reply?.ok
+      ? { ok: true, isAccepted: reply.isAccepted, state: StudylogAttendanceWatchRules.classifyEntry(reply) }
+      : { ok: false, error: reply?.error || "確認できませんでした。" };
+    if (!result.entryUrl) return result;
+
+    const screenResponse = await fetch(result.entryUrl, { credentials: "include" });
+    if (!screenResponse.ok) throw new Error(`出席確認の画面を取得できませんでした (HTTP ${screenResponse.status})`);
+    const screenHtml = await screenResponse.text();
+    const screenDoc = new DOMParser().parseFromString(screenHtml, "text/html");
+    screenDoc.body?.querySelectorAll("script, style, nav, header").forEach((element) => element.remove());
+    result.screen = {
+      url: screenResponse.url,
+      title: (screenDoc.title || "").slice(0, 120),
+      state: rules.classifyScreen(screenHtml),
+      loginScreen: Boolean(screenDoc.querySelector('input[type="password"]')),
+      excerpt: (screenDoc.body?.textContent || "").replace(/\s+/g, " ").trim().slice(0, 400)
+    };
+    return result;
+  }
+
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    const run = message?.type === "studylog-bridge:attendance-probe" ? inspectAttendance
+      : message?.type === "studylog-bridge:attendance-rehearse" ? rehearseAttendanceOpen
+      : null;
+    if (!run) return;
+    run(message.classId).then(
+      (result) => sendResponse({ ok: true, result }),
+      (error) => sendResponse({ ok: false, error: String(error?.message || error).slice(0, 200) })
+    );
+    return true;
+  });
+
   function observeCurrentPage() {
     const observer = new MutationObserver((mutations) => {
       const outsideCompanion = mutations.some((mutation) => !mutation.target.closest?.(`#${ROOT_ID}, #${QUIZ_INSPECTOR_ROOT_ID}`));
@@ -1662,7 +2080,10 @@
   document.addEventListener("click", (event) => {
     const root = document.getElementById(ROOT_ID);
     const panel = root?.querySelector("#studylog-bridge-panel");
-    if (panel?.dataset.open === "true" && !event.composedPath().includes(root)) panel.dataset.open = "false";
+    if (panel?.dataset.open === "true" && !event.composedPath().includes(root)) {
+      panel.dataset.open = "false";
+      root.querySelector("#studylog-bridge-toggle").setAttribute("aria-expanded", "false");
+    }
   });
 
   const initialize = () => {
@@ -1673,8 +2094,11 @@
       captureCurrentPageAutomatically().catch(() => null).finally(runAutomaticCollection);
     }, 500);
     window.setInterval(() => runAutomaticCollection(), AUTO_COLLECT_INTERVAL_MS);
+    scheduleAttendanceWatch(5 * 1000);
     document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") runAutomaticCollection();
+      if (document.visibilityState !== "visible") return;
+      runAutomaticCollection();
+      runAttendanceWatch();
     });
     window.addEventListener("popstate", () => syncPageMode(true));
     window.addEventListener("hashchange", () => syncPageMode(true));
